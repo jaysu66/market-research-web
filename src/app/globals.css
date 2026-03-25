@@ -462,6 +462,81 @@ body {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
+/* ---- SVG Map ---- */
+
+.svg-map-container {
+  position: relative;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.svg-map-container svg {
+  width: 100%;
+  height: auto;
+}
+
+.svg-map-container svg path {
+  transition: all 0.2s ease;
+  stroke: #fff;
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.svg-map-container svg path:hover {
+  stroke: #111827;
+  stroke-width: 2;
+  filter: brightness(0.9);
+}
+
+@keyframes svg-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.svg-map-generating {
+  animation: svg-pulse 1.5s ease-in-out infinite;
+}
+
+.map-tooltip {
+  position: fixed;
+  z-index: 100;
+  background: white;
+  border-radius: 12px;
+  padding: 12px 16px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+  border: 1px solid #e5e7eb;
+  pointer-events: none;
+  min-width: 180px;
+  animation: fadeSlideUp 0.15s ease-out;
+}
+
+.map-view-toggle {
+  display: flex;
+  gap: 2px;
+  background: #f3f4f6;
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.map-view-toggle button {
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.map-view-toggle button.active {
+  background: white;
+  color: #111827;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
 /* ---- Responsive ---- */
 
 @media (max-width: 768px) {

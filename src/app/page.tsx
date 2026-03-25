@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { US_MAP_VIEWBOX, US_STATE_PATHS } from "./us-map-paths";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -102,6 +103,7 @@ export default function DashboardPage() {
   const [confirmPos, setConfirmPos] = useState({ x: 0, y: 0 });
   const [sortKey, setSortKey] = useState<SortKey>("overall");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [mapView, setMapView] = useState<"tile" | "svg">("tile");
   const pollingRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -438,56 +440,83 @@ export default function DashboardPage() {
               </div>
             </section>
 
-            {/* Section: US Tile Map */}
+            {/* Section: US Map */}
             <section className="mb-10">
-              <h2 className="text-xl font-bold text-[#111827] mb-4">地理分布</h2>
-              <div className="card p-6">
-                <div className="us-tile-map">
-                  {STATE_CODES.map((code) => {
-                    const pos = US_MAP_POSITIONS[code];
-                    if (!pos) return null;
-                    const info = states[code];
-                    const hasReport = !!info?.report;
-                    const isGenerating = info?.generating;
-                    const score = info?.pool?.overall_score;
-                    const rec = info?.pool?.recommendation ?? info?.pool?.go_nogo ?? "";
-
-                    let bgColor = "#f3f4f6";
-                    if (hasReport) {
-                      if (rec.includes("推荐") || rec.toLowerCase() === "go") bgColor = "#10b981";
-                      else if (rec.includes("谨慎") || rec.includes("观望")) bgColor = "#f59e0b";
-                      else if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) bgColor = "#ef4444";
-                      else bgColor = "#6366f1";
-                    }
-                    if (isGenerating) bgColor = "#c7d2fe";
-
-                    return (
-                      <div
-                        key={code}
-                        className="map-tile"
-                        style={{
-                          gridColumn: pos[0],
-                          gridRow: pos[1],
-                          backgroundColor: bgColor,
-                        }}
-                        onClick={(e) => handleCardClick(code, e)}
-                        title={`${US_STATES[code]} ${score ? `(${score}分)` : hasReport ? "(已调研)" : "(未调研)"}`}
-                      >
-                        <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
-                          {code}
-                        </span>
-                        {hasReport && score !== undefined && (
-                          <span className="text-[8px] text-white/80">{score}</span>
-                        )}
-                      </div>
-                    );
-                  })}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-[#111827]">地理分布</h2>
+                <div className="map-view-toggle">
+                  <button
+                    className={mapView === "tile" ? "active" : ""}
+                    onClick={() => setMapView("tile")}
+                  >
+                    方块
+                  </button>
+                  <button
+                    className={mapView === "svg" ? "active" : ""}
+                    onClick={() => setMapView("svg")}
+                  >
+                    地图
+                  </button>
                 </div>
+              </div>
+              <div className="card p-6">
+                {mapView === "tile" ? (
+                  <>
+                    <div className="us-tile-map">
+                      {STATE_CODES.map((code) => {
+                        const pos = US_MAP_POSITIONS[code];
+                        if (!pos) return null;
+                        const info = states[code];
+                        const hasReport = !!info?.report;
+                        const isGenerating = info?.generating;
+                        const score = info?.pool?.overall_score;
+                        const rec = info?.pool?.recommendation ?? info?.pool?.go_nogo ?? "";
+
+                        let bgColor = "#f3f4f6";
+                        if (hasReport) {
+                          if (rec.includes("推荐") || rec.toLowerCase() === "go") bgColor = "#10b981";
+                          else if (rec.includes("谨慎") || rec.includes("观望")) bgColor = "#f59e0b";
+                          else if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) bgColor = "#ef4444";
+                          else bgColor = "#6366f1";
+                        }
+                        if (isGenerating) bgColor = "#c7d2fe";
+
+                        return (
+                          <div
+                            key={code}
+                            className="map-tile"
+                            style={{
+                              gridColumn: pos[0],
+                              gridRow: pos[1],
+                              backgroundColor: bgColor,
+                            }}
+                            onClick={(e) => handleCardClick(code, e)}
+                            title={`${US_STATES[code]} ${score ? `(${score}分)` : hasReport ? "(已调研)" : "(未调研)"}`}
+                          >
+                            <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
+                              {code}
+                            </span>
+                            {hasReport && score !== undefined && (
+                              <span className="text-[8px] text-white/80">{score}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <SvgMapView
+                    states={states}
+                    onCardClick={handleCardClick}
+                  />
+                )}
                 {/* Legend */}
                 <div className="flex items-center justify-center gap-6 mt-4 text-xs text-[#6b7280]">
                   <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#10b981]"></span> 推荐进入</span>
                   <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#f59e0b]"></span> 谨慎评估</span>
                   <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#ef4444]"></span> 不推荐</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#6366f1]"></span> 已调研</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#c7d2fe]"></span> 生成中</span>
                   <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#e5e7eb]"></span> 未调研</span>
                 </div>
               </div>
@@ -737,6 +766,115 @@ function ScoreCell({ value }: { value?: number }) {
       <div className="score-bar flex-1">
         <div className="score-bar-fill" style={{ width: `${value}%`, backgroundColor: color }} />
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SVG Map View
+// ---------------------------------------------------------------------------
+function getStateFillColor(info: StateInfo | undefined): string {
+  if (!info) return "#e5e7eb";
+  if (info.generating) return "#c7d2fe";
+  if (!info.report) return "#e5e7eb";
+  const rec = info.pool?.recommendation ?? info.pool?.go_nogo ?? "";
+  if (rec.includes("推荐") || rec.toLowerCase() === "go") return "#10b981";
+  if (rec.includes("谨慎") || rec.includes("观望")) return "#f59e0b";
+  if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) return "#ef4444";
+  return "#6366f1";
+}
+
+function getRecommendationLabel(info: StateInfo): string {
+  if (!info.report) return "未调研";
+  const rec = info.pool?.recommendation ?? info.pool?.go_nogo ?? "";
+  if (rec.includes("推荐") || rec.toLowerCase() === "go") return "\u2705 推荐进入";
+  if (rec.includes("谨慎") || rec.includes("观望")) return "\u26a0\ufe0f 谨慎评估";
+  if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) return "\u274c 不推荐";
+  return "\ud83d\udcca 已调研";
+}
+
+function SvgMapView({
+  states,
+  onCardClick,
+}: {
+  states: Record<string, StateInfo>;
+  onCardClick: (code: string, e: React.MouseEvent) => void;
+}) {
+  const [tooltip, setTooltip] = useState<{
+    code: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleMouseEnter = (code: string, e: React.MouseEvent) => {
+    const rect = (e.target as SVGElement).getBoundingClientRect();
+    setTooltip({
+      code,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 8,
+    });
+  };
+
+  const handleMouseLeave = () => {
+    setTooltip(null);
+  };
+
+  const tooltipInfo = tooltip ? states[tooltip.code] : null;
+
+  return (
+    <div className="svg-map-container">
+      <svg viewBox={US_MAP_VIEWBOX} xmlns="http://www.w3.org/2000/svg">
+        {Object.entries(US_STATE_PATHS).map(([code, pathD]) => {
+          const info = states[code];
+          const fillColor = getStateFillColor(info);
+          const isGenerating = info?.generating;
+          return (
+            <path
+              key={code}
+              d={pathD}
+              fill={fillColor}
+              className={isGenerating ? "svg-map-generating" : ""}
+              onMouseEnter={(e) => handleMouseEnter(code, e)}
+              onMouseLeave={handleMouseLeave}
+              onClick={(e) => onCardClick(code, e as unknown as React.MouseEvent)}
+            />
+          );
+        })}
+      </svg>
+
+      {/* Tooltip */}
+      {tooltip && tooltipInfo && (
+        <div
+          className="map-tooltip"
+          style={{
+            left: Math.min(tooltip.x - 90, window.innerWidth - 200),
+            top: Math.max(tooltip.y - 100, 10),
+          }}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-bold text-[#111827] text-base">{US_STATES[tooltip.code]}</span>
+            <span className="text-xs text-[#9ca3af]">({tooltip.code})</span>
+          </div>
+          {tooltipInfo.report ? (
+            <>
+              {tooltipInfo.pool?.overall_score !== undefined && (
+                <div className="text-sm text-[#6b7280] mb-1">
+                  综合评分: <span className="font-semibold text-[#111827]">{tooltipInfo.pool.overall_score}</span>
+                </div>
+              )}
+              <div className="text-sm mb-1.5">{getRecommendationLabel(tooltipInfo)}</div>
+              <div className="text-xs text-[#6366f1] font-medium">点击查看报告 →</div>
+            </>
+          ) : tooltipInfo.generating ? (
+            <div className="flex items-center gap-1.5 text-sm text-[#6366f1]">
+              <div className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+              报告生成中...
+            </div>
+          ) : (
+            <div className="text-sm text-[#9ca3af]">点击生成报告</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
