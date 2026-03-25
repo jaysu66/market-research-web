@@ -25,6 +25,19 @@ const US_STATES: Record<string, string> = {
 
 const STATE_CODES = Object.keys(US_STATES);
 
+// US Tile Map positions: [col, row] 1-indexed for CSS grid (12 cols x 8 rows)
+const US_MAP_POSITIONS: Record<string, [number, number]> = {
+  ME: [12, 1],
+  VT: [10, 1], NH: [11, 1],
+  WA: [2, 2], MT: [3, 2], ND: [4, 2], MN: [5, 2], WI: [7, 2], MI: [8, 2], NY: [10, 2], MA: [11, 2],
+  OR: [2, 3], ID: [3, 3], SD: [4, 3], IA: [5, 3], IL: [6, 3], IN: [7, 3], OH: [8, 3], PA: [9, 3], NJ: [10, 3], CT: [11, 3], RI: [12, 3],
+  NV: [2, 4], WY: [3, 4], NE: [4, 4], MO: [5, 4], KY: [6, 4], WV: [7, 4], VA: [8, 4], MD: [9, 4], DE: [10, 4],
+  CA: [1, 5], UT: [3, 5], CO: [4, 5], KS: [5, 5], AR: [6, 5], TN: [7, 5], NC: [8, 5], SC: [9, 5],
+  AZ: [3, 6], NM: [4, 6], OK: [5, 6], LA: [6, 6], MS: [7, 6], AL: [8, 6], GA: [9, 6],
+  TX: [5, 7], FL: [9, 7],
+  AK: [1, 8], HI: [2, 8],
+};
+
 const CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
   { key: "blinds", label: "百叶窗" },
@@ -368,6 +381,118 @@ export default function DashboardPage() {
 
         {!loading && (
           <>
+            {/* Section: Executive Summary */}
+            <section className="mb-10">
+              <div className="card p-6" style={{ background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #e0e7ff 100%)" }}>
+                {/* Stats row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                  <SummaryCard label="已调研" value={`${researchedCount}/50`} sub="州" color="#6366f1" />
+                  <SummaryCard label="推荐进入" value={`${recommendCount}`} sub="州" color="#10b981" />
+                  <SummaryCard
+                    label="最高评分"
+                    value={
+                      researchedStates.length > 0
+                        ? researchedStates.reduce((best, s) => ((s.pool?.overall_score ?? 0) > (best.pool?.overall_score ?? 0) ? s : best), researchedStates[0]).code
+                        : "--"
+                    }
+                    sub={
+                      researchedStates.length > 0
+                        ? `${researchedStates.reduce((best, s) => ((s.pool?.overall_score ?? 0) > (best.pool?.overall_score ?? 0) ? s : best), researchedStates[0]).pool?.overall_score ?? 0}分`
+                        : ""
+                    }
+                    color="#8b5cf6"
+                  />
+                  <SummaryCard
+                    label="平均分"
+                    value={
+                      researchedStates.length > 0
+                        ? `${Math.round(researchedStates.reduce((sum, s) => sum + (s.pool?.overall_score ?? 0), 0) / researchedStates.length)}`
+                        : "--"
+                    }
+                    sub="分"
+                    color="#f59e0b"
+                  />
+                </div>
+                {/* AI Summary */}
+                <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 text-sm text-[#374151] leading-relaxed">
+                  <span className="text-[#6366f1] font-semibold">AI 分析摘要：</span>
+                  {researchedStates.length === 0
+                    ? "尚未开始调研，点击下方州卡片开始首次调研。"
+                    : (() => {
+                        const topState = researchedStates.reduce((best, s) =>
+                          (s.pool?.overall_score ?? 0) > (best.pool?.overall_score ?? 0) ? s : best,
+                          researchedStates[0]
+                        );
+                        const goStates = researchedStates.filter(
+                          (s) => s.pool?.recommendation?.includes("推荐") || s.pool?.go_nogo?.toLowerCase() === "go"
+                        );
+                        const goNames = goStates.slice(0, 5).map((s) => s.name).join("、");
+                        const marketScore = topState.pool?.market_size_score ?? 0;
+                        const marketLabel = marketScore >= 70 ? "大" : marketScore >= 40 ? "中" : "小";
+                        const compScore = topState.pool?.competition_score ?? 0;
+                        const compLabel = compScore >= 70 ? "弱" : compScore >= 40 ? "适中" : "强";
+                        return `基于对 ${researchedStates.length} 个州的深度调研分析${goNames ? `，推荐优先进入 ${goNames}` : ""}。${topState.name} 综合评分最高（${topState.pool?.overall_score ?? 0}分），市场规模${marketLabel}且竞争${compLabel}。`;
+                      })()
+                  }
+                </div>
+              </div>
+            </section>
+
+            {/* Section: US Tile Map */}
+            <section className="mb-10">
+              <h2 className="text-xl font-bold text-[#111827] mb-4">地理分布</h2>
+              <div className="card p-6">
+                <div className="us-tile-map">
+                  {STATE_CODES.map((code) => {
+                    const pos = US_MAP_POSITIONS[code];
+                    if (!pos) return null;
+                    const info = states[code];
+                    const hasReport = !!info?.report;
+                    const isGenerating = info?.generating;
+                    const score = info?.pool?.overall_score;
+                    const rec = info?.pool?.recommendation ?? info?.pool?.go_nogo ?? "";
+
+                    let bgColor = "#f3f4f6";
+                    if (hasReport) {
+                      if (rec.includes("推荐") || rec.toLowerCase() === "go") bgColor = "#10b981";
+                      else if (rec.includes("谨慎") || rec.includes("观望")) bgColor = "#f59e0b";
+                      else if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) bgColor = "#ef4444";
+                      else bgColor = "#6366f1";
+                    }
+                    if (isGenerating) bgColor = "#c7d2fe";
+
+                    return (
+                      <div
+                        key={code}
+                        className="map-tile"
+                        style={{
+                          gridColumn: pos[0],
+                          gridRow: pos[1],
+                          backgroundColor: bgColor,
+                        }}
+                        onClick={(e) => handleCardClick(code, e)}
+                        title={`${US_STATES[code]} ${score ? `(${score}分)` : hasReport ? "(已调研)" : "(未调研)"}`}
+                      >
+                        <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
+                          {code}
+                        </span>
+                        {hasReport && score !== undefined && (
+                          <span className="text-[8px] text-white/80">{score}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-6 mt-4 text-xs text-[#6b7280]">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#10b981]"></span> 推荐进入</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#f59e0b]"></span> 谨慎评估</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#ef4444]"></span> 不推荐</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#e5e7eb]"></span> 未调研</span>
+                </div>
+              </div>
+            </section>
+
             {/* Section: 50-State Grid */}
             <section className="mb-12">
               <div className="flex items-center justify-between mb-6">
@@ -554,6 +679,16 @@ export default function DashboardPage() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+function SummaryCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
+  return (
+    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 text-center">
+      <p className="text-xs text-[#6b7280] mb-1">{label}</p>
+      <p className="text-2xl font-bold" style={{ color }}>{value}</p>
+      <p className="text-xs text-[#9ca3af]">{sub}</p>
+    </div>
+  );
+}
 
 function SortHeader({
   label,
