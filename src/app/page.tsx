@@ -756,15 +756,34 @@ function ReportCard({ report }: { report: Report }) {
         )}
       </div>
 
-      {/* Download links */}
+      {/* Preview + Download links */}
       {downloads.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-3 border-t border-[--border-subtle]">
+          {/* Online preview button - prominent */}
+          {(() => {
+            const htmlUrl = downloads.find(d => d.label === "HTML 报告")?.url;
+            return htmlUrl ? (
+              <a
+                href={htmlUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-bold rounded-md
+                           bg-[--accent]/15 text-[--accent] hover:bg-[--accent]/25
+                           border border-[--accent]/30 hover:border-[--accent]/50
+                           transition-colors"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                在线预览
+              </a>
+            ) : null;
+          })()}
           {downloads.map((d) => (
             <a
               key={d.label}
               href={d.url}
               target="_blank"
               rel="noopener noreferrer"
+              download
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md
                          bg-[--bg-tertiary] text-[--text-secondary] hover:text-[--text-primary]
                          border border-[--border-subtle] hover:border-[--border]
