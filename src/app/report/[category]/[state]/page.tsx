@@ -128,7 +128,7 @@ export default async function ReportPage({
     <div className="min-h-screen bg-[#f8f9fa]">
       {/* Fixed Top Nav */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-[#e5e7eb]">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <a
               href="/"
@@ -172,7 +172,7 @@ export default async function ReportPage({
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
         {/* Key Insights Card */}
         {pool && (
           <div

@@ -93,6 +93,22 @@ type SortKey = "rank" | "state" | "overall" | "market" | "competition" | "cost" 
 type SortDir = "asc" | "desc";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+function getStepLabel(step: string): string {
+  const labels: Record<string, string> = {
+    collecting: "API采集中",
+    searching: "搜索中",
+    cleaning: "数据清洗",
+    generating: "报告生成",
+    exporting: "导出中",
+    completed: "已完成",
+    error: "失败",
+  };
+  return labels[step] || "处理中";
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 export default function DashboardPage() {
@@ -186,6 +202,26 @@ export default function DashboardPage() {
     fetchReports(category);
   }, [category, fetchReports]);
 
+  // Restore generating tasks from localStorage
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
+      const entries = Object.entries(saved) as [string, { taskId: string; category: string }][];
+      if (entries.length > 0) {
+        setStates(prev => {
+          const next = { ...prev };
+          for (const [code, { taskId, category: cat }] of entries) {
+            if (cat === category && next[code]) {
+              next[code] = { ...next[code], generating: true, taskId, progress: 0, step: 'collecting' };
+              pollingRef.current.add(code);
+            }
+          }
+          return next;
+        });
+      }
+    } catch { /* ignore */ }
+  }, [category]);
+
   // Polling for generating tasks
   useEffect(() => {
     const poll = async () => {
@@ -201,6 +237,12 @@ export default function DashboardPage() {
             const data = await res.json();
             if (data.status === "completed" || data.status === "error") {
               pollingRef.current.delete(code);
+              // Remove from localStorage
+              try {
+                const tasks = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
+                delete tasks[code];
+                localStorage.setItem('generating_tasks', JSON.stringify(tasks));
+              } catch { /* ignore */ }
               if (data.status === "completed") {
                 // Refresh all reports
                 setTimeout(() => fetchReports(category), 1000);
@@ -251,6 +293,12 @@ export default function DashboardPage() {
       });
       if (res.ok) {
         const data = await res.json();
+        // Persist to localStorage
+        try {
+          const tasks = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
+          tasks[code] = { taskId: data.task_id, category };
+          localStorage.setItem('generating_tasks', JSON.stringify(tasks));
+        } catch { /* ignore */ }
         setStates((prev) => ({
           ...prev,
           [code]: { ...prev[code], taskId: data.task_id },
@@ -586,9 +634,14 @@ export default function DashboardPage() {
                       )}
 
                       {isGenerating && (
-                        <div className="flex items-center gap-1 mt-1.5">
+                        <div className="flex flex-col items-center gap-1 mt-1.5">
                           <div className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
-                          <span className="text-[10px] text-[#6366f1]">生成中</span>
+                          <span className="text-[10px] text-[#6366f1] leading-tight text-center">
+                            {getStepLabel(info.step)}
+                          </span>
+                          {info.progress > 0 && (
+                            <span className="text-[9px] text-[#9ca3af]">{info.progress}%</span>
+                          )}
                         </div>
                       )}
 
@@ -602,6 +655,51 @@ export default function DashboardPage() {
                 })}
               </div>
             </section>
+
+            {/* Active generation progress */}
+            {(() => {
+              const generatingStates = STATE_CODES
+                .filter(code => states[code]?.generating)
+                .map(code => states[code]);
+              if (generatingStates.length === 0) return null;
+              return (
+                <section className="mb-10">
+                  <h2 className="text-lg font-bold text-[#111827] mb-4">生成进度</h2>
+                  <div className="grid gap-3">
+                    {generatingStates.map(s => (
+                      <div key={s.code} className="card p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-[#111827]">{s.code}</span>
+                            <span className="text-sm text-[#6b7280]">{s.name}</span>
+                          </div>
+                          <span className="text-sm text-[#6366f1] font-medium">{getStepLabel(s.step)}</span>
+                        </div>
+                        <div className="flex gap-1">
+                          {['collecting','searching','cleaning','generating','exporting'].map((step, i) => {
+                            const currentIdx = ['collecting','searching','cleaning','generating','exporting'].indexOf(s.step);
+                            const isDone = i < currentIdx;
+                            const isCurrent = i === currentIdx;
+                            return (
+                              <div key={step} className="flex-1 flex flex-col items-center gap-1">
+                                <div
+                                  className={`h-1.5 w-full rounded-full ${
+                                    isDone ? 'bg-[#10b981]' : isCurrent ? 'bg-[#6366f1] animate-pulse' : 'bg-[#e5e7eb]'
+                                  }`}
+                                />
+                                <span className={`text-[9px] ${isCurrent ? 'text-[#6366f1] font-medium' : isDone ? 'text-[#10b981]' : 'text-[#9ca3af]'}`}>
+                                  {['采集','搜索','清洗','生成','导出'][i]}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })()}
 
             {/* Confirm Popup */}
             {confirmState && (
