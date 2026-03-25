@@ -423,7 +423,7 @@ export default function DashboardPage() {
   const [confirmPos, setConfirmPos] = useState({ x: 0, y: 0 });
   const [sortKey, setSortKey] = useState<SortKey>("overall");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [mapView, setMapView] = useState<"tile" | "svg">("tile");
+  const [mapView, setMapView] = useState<"tile" | "svg">("svg");
   const [compareMode, setCompareMode] = useState(false);
   const [compareSelected, setCompareSelected] = useState<string[]>([]);
   const [showComparePanel, setShowComparePanel] = useState(false);
@@ -1022,7 +1022,10 @@ export default function DashboardPage() {
                 {/* Map Section */}
                 <section>
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-bold text-[#111827]">地理分布</h2>
+                    <div>
+                      <h2 className="text-xl font-bold text-[#111827]">美国地图 — 市场评级热力图</h2>
+                      <p className="text-sm text-gray-500">点击任意州查看详细报告 · 颜色代表评级</p>
+                    </div>
                     <div className="map-view-toggle">
                       <button
                         className={mapView === "tile" ? "active" : ""}
