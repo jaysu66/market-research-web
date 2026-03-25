@@ -74,6 +74,45 @@ interface ReportData {
   files: ReportFiles;
 }
 
+// Raw data pool from Supabase
+interface RawDataPool {
+  state?: string;
+  state_name?: string;
+  product?: string;
+  demographics?: {
+    state_level?: Array<{
+      population?: number;
+      median_income?: number;
+      median_home_value?: number;
+      housing_units?: number;
+    }>;
+    cities?: Array<{
+      name?: string;
+      population?: number;
+      median_income?: number;
+    }>;
+  };
+  industry_benchmarks?: {
+    annual_revenue_range?: string;
+    custom_gross_margin?: string;
+    rent_pct?: string;
+    labor_pct?: string;
+  };
+  search_extracted?: {
+    pricing?: unknown[];
+    rent?: unknown[];
+    competition?: unknown[];
+  };
+  // Also support pre-computed scores if backend provides them
+  overall_score?: number;
+  market_size_score?: number;
+  competition_score?: number;
+  operating_cost_score?: number;
+  growth_potential_score?: number;
+  recommendation?: string;
+  go_nogo?: string;
+}
+
 interface DataPoolState {
   overall_score?: number;
   market_size_score?: number;
@@ -85,6 +124,91 @@ interface DataPoolState {
   store_count?: number;
   estimated_revenue?: string;
   go_nogo?: string;
+}
+
+/** Compute scores from raw data pool when pre-computed scores are absent */
+function computeScores(raw: RawDataPool): DataPoolState {
+  // If backend already provides scores, use them directly
+  if (raw.overall_score !== undefined) {
+    return {
+      overall_score: raw.overall_score,
+      market_size_score: raw.market_size_score,
+      competition_score: raw.competition_score,
+      operating_cost_score: raw.operating_cost_score,
+      growth_potential_score: raw.growth_potential_score,
+      recommendation: raw.recommendation,
+      go_nogo: raw.go_nogo,
+    };
+  }
+
+  const stateData = raw.demographics?.state_level?.[0];
+  if (!stateData) return {};
+
+  const pop = stateData.population ?? 0;
+  const income = stateData.median_income ?? 0;
+  const homeValue = stateData.median_home_value ?? 0;
+  const housing = stateData.housing_units ?? 0;
+  const cityCount = raw.demographics?.cities?.length ?? 0;
+
+  // Market size score: based on population and housing units
+  // TX has ~30M pop, ~12M housing — scale relative to that as "large"
+  const popScore = Math.min(100, Math.round((pop / 30000000) * 80));
+  const housingScore = Math.min(100, Math.round((housing / 10000000) * 80));
+  const market_size_score = Math.min(100, Math.round((popScore + housingScore) / 2));
+
+  // Competition score: higher = less competition = better
+  // If no competition data, assume moderate
+  const hasCompData = raw.search_extracted?.competition?.some(
+    (c: unknown) => c && typeof c === "object" && !("no_data" in (c as Record<string, unknown>))
+  );
+  const competition_score = hasCompData ? 45 : 60; // No data means less saturated
+
+  // Operating cost score: higher = lower cost = better
+  // Based on median rent and income levels
+  const rentRatio = homeValue > 0 ? income / homeValue : 0;
+  const operating_cost_score = Math.min(100, Math.round(rentRatio * 200 + 20));
+
+  // Growth potential: based on city count, income, and population
+  const incomeScore = Math.min(100, Math.round((income / 100000) * 70));
+  const cityScore = Math.min(100, Math.round((cityCount / 20) * 60));
+  const growth_potential_score = Math.min(100, Math.round((incomeScore + cityScore) / 2));
+
+  // Overall score
+  const overall_score = Math.round(
+    market_size_score * 0.3 +
+    competition_score * 0.2 +
+    operating_cost_score * 0.2 +
+    growth_potential_score * 0.3
+  );
+
+  // Recommendation
+  let recommendation = "谨慎评估";
+  let go_nogo = "evaluate";
+  if (overall_score >= 65) {
+    recommendation = "推荐进入";
+    go_nogo = "go";
+  } else if (overall_score < 40) {
+    recommendation = "不推荐";
+    go_nogo = "no-go";
+  }
+
+  // Population string
+  const popStr = pop > 1000000 ? `${(pop / 1000000).toFixed(1)}M` : `${(pop / 1000).toFixed(0)}K`;
+
+  // Revenue estimate from benchmarks
+  const estimated_revenue = raw.industry_benchmarks?.annual_revenue_range ?? "";
+
+  return {
+    overall_score,
+    market_size_score,
+    competition_score,
+    operating_cost_score,
+    growth_potential_score,
+    recommendation,
+    go_nogo,
+    population: popStr,
+    estimated_revenue,
+  };
 }
 
 interface StateInfo {
@@ -164,15 +288,16 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("fetch failed");
       const reports: ReportData[] = await res.json();
 
-      // Load data pools for each report
+      // Load data pools for each report and compute scores
       const poolPromises = reports.map(async (r) => {
         const poolUrl = r.files?.["data_pool.json"];
         if (!poolUrl) return { code: r.state_code, pool: null };
         try {
           const pRes = await fetch(poolUrl);
           if (pRes.ok) {
-            const pool = await pRes.json();
-            return { code: r.state_code, pool: pool as DataPoolState };
+            const rawPool: RawDataPool = await pRes.json();
+            const pool = computeScores(rawPool);
+            return { code: r.state_code, pool };
           }
         } catch { /* ignore */ }
         return { code: r.state_code, pool: null };

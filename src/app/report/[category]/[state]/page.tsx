@@ -81,7 +81,7 @@ export default async function ReportPage({
 
   // Fetch reports from Supabase (no backend needed)
   let report: ReportData | null = null;
-  let htmlContent = "";
+  let htmlUrl = "";
   let pool: DataPool | null = null;
 
   try {
@@ -97,16 +97,9 @@ export default async function ReportPage({
     // supabase unreachable
   }
 
-  // Fetch HTML content
+  // Get HTML URL for iframe (report.html is a full document with scripts/styles)
   if (report?.files?.["report.html"]) {
-    try {
-      const htmlRes = await fetch(report.files["report.html"], {
-        next: { revalidate: 60 },
-      });
-      if (htmlRes.ok) {
-        htmlContent = await htmlRes.text();
-      }
-    } catch { /* ignore */ }
+    htmlUrl = report.files["report.html"];
   }
 
   // Fetch data pool
@@ -218,11 +211,14 @@ export default async function ReportPage({
         )}
 
         {/* Report Content */}
-        {htmlContent ? (
-          <div className="card p-6 sm:p-8">
-            <div
-              className="report-content"
-              dangerouslySetInnerHTML={{ __html: htmlContent }}
+        {htmlUrl ? (
+          <div className="card overflow-hidden" style={{ minHeight: "80vh" }}>
+            <iframe
+              src={htmlUrl}
+              className="w-full border-0"
+              style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}
+              title={`${stateName} ${categoryLabel} 市场调研报告`}
+              sandbox="allow-scripts allow-same-origin"
             />
           </div>
         ) : (

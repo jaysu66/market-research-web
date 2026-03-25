@@ -212,28 +212,32 @@ export default function WorkspacePage() {
 
     const poll = async () => {
       setQueue((prev) => {
-        const updated = [...prev];
-        const promises = updated
-          .filter((t) => t.status === "running" && t.taskId)
-          .map(async (t, idx) => {
-            try {
-              const res = await fetch(`${API}/status/${t.taskId}`);
-              if (res.ok) {
-                const data = await res.json();
-                const origIdx = prev.findIndex((p) => p.stateCode === t.stateCode);
-                if (origIdx >= 0) {
-                  updated[origIdx] = {
-                    ...updated[origIdx],
-                    progress: data.progress ?? 0,
-                    step: data.step ?? "",
-                    status: data.status === "completed" ? "completed" : data.status === "error" ? "error" : "running",
-                  };
-                }
-              }
-            } catch { /* ignore */ }
-          });
-        Promise.all(promises);
-        return updated;
+        const running = prev.filter((t) => t.status === "running" && t.taskId);
+        if (running.length === 0) return prev;
+
+        // Fire off async status checks and update state when they resolve
+        // (we return prev unchanged here; updates happen via separate setQueue calls)
+        for (const t of running) {
+          fetch(`${API}/status/${t.taskId}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+              if (!data) return;
+              setQueue((cur) =>
+                cur.map((item) =>
+                  item.stateCode === t.stateCode
+                    ? {
+                        ...item,
+                        progress: data.progress ?? 0,
+                        step: data.step ?? "",
+                        status: data.status === "completed" ? "completed" : data.status === "error" ? "error" : "running",
+                      }
+                    : item
+                )
+              );
+            })
+            .catch(() => { /* ignore */ });
+        }
+        return prev;
       });
     };
 
