@@ -5,807 +5,603 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const API_BASE = "/api/proxy";
-const SUPABASE_URL = "https://bbfyfkjcvhpqmjticmsy.supabase.co";
-const SUPABASE_BUCKET = "market-reports";
+const API = "/api/proxy";
 
 const US_STATES: Record<string, string> = {
-  AL: "Alabama",   AK: "Alaska",       AZ: "Arizona",      AR: "Arkansas",
-  CA: "California", CO: "Colorado",     CT: "Connecticut",  DE: "Delaware",
-  FL: "Florida",   GA: "Georgia",      HI: "Hawaii",       ID: "Idaho",
-  IL: "Illinois",  IN: "Indiana",      IA: "Iowa",         KS: "Kansas",
-  KY: "Kentucky",  LA: "Louisiana",    ME: "Maine",        MD: "Maryland",
-  MA: "Massachusetts", MI: "Michigan",  MN: "Minnesota",    MS: "Mississippi",
-  MO: "Missouri",  MT: "Montana",      NE: "Nebraska",     NV: "Nevada",
-  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico",  NY: "New York",
-  NC: "North Carolina", ND: "North Dakota", OH: "Ohio",     OK: "Oklahoma",
-  OR: "Oregon",    PA: "Pennsylvania", RI: "Rhode Island",  SC: "South Carolina",
-  SD: "South Dakota", TN: "Tennessee", TX: "Texas",         UT: "Utah",
-  VT: "Vermont",   VA: "Virginia",     WA: "Washington",   WV: "West Virginia",
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas",
+  CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho",
+  IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas",
+  KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma",
+  OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah",
+  VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia",
   WI: "Wisconsin", WY: "Wyoming",
 };
 
-const TOP10_STATES = [
-  "CA", "TX", "NY", "FL", "IL", "PA", "OH", "GA", "NC", "NJ",
-];
+const STATE_CODES = Object.keys(US_STATES);
 
-const STEPS = [
-  { key: "collecting", label: "API 数据采集" },
-  { key: "searching",  label: "市场搜索分析" },
-  { key: "cleaning",   label: "数据清洗整合" },
-  { key: "reporting",  label: "报告撰写生成" },
-  { key: "exporting",  label: "文件导出完成" },
+const CATEGORIES = [
+  { key: "curtains", label: "窗帘/窗饰" },
+  { key: "blinds", label: "百叶窗" },
+  { key: "shutters", label: "卷帘" },
 ];
-
-const COST_PER_STATE = 0.35; // approximate $ per state
-const MINS_PER_STATE = 2.5;
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-type AppView = "empty" | "select" | "generating" | "reports";
-
-interface ReportFile {
-  html?: string;
-  data_docx?: string;
-  business_docx?: string;
+interface ReportFiles {
+  "report.html"?: string;
+  "report_a.docx"?: string;
+  "report_b.docx"?: string;
+  "data_pool.json"?: string;
   [key: string]: string | undefined;
 }
 
-interface Report {
+interface ReportData {
   state_code: string;
   state_name: string;
-  files: ReportFile;
+  product: string;
+  timestamp?: string;
   created_at: string;
-  population?: string;
-  gdp?: string;
-  stores?: string;
-  go_no_go?: string;
+  files: ReportFiles;
 }
 
-interface TaskStatus {
-  task_id: string;
-  status: string;
+interface DataPoolState {
+  overall_score?: number;
+  market_size_score?: number;
+  competition_score?: number;
+  operating_cost_score?: number;
+  growth_potential_score?: number;
+  recommendation?: string;
+  population?: string;
+  store_count?: number;
+  estimated_revenue?: string;
+  go_nogo?: string;
+}
+
+interface StateInfo {
+  code: string;
+  name: string;
+  report: ReportData | null;
+  pool: DataPoolState | null;
+  generating: boolean;
+  taskId: string | null;
   progress: number;
   step: string;
-  result?: Record<string, unknown>;
 }
 
-interface GeneratingTask {
-  stateCode: string;
-  taskId: string;
-  status: TaskStatus | null;
-}
+type SortKey = "rank" | "state" | "overall" | "market" | "competition" | "cost" | "growth" | "recommendation";
+type SortDir = "asc" | "desc";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Main Page
 // ---------------------------------------------------------------------------
-function supabasePublicUrl(path: string) {
-  return `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${path}`;
-}
+export default function DashboardPage() {
+  const [category, setCategory] = useState("curtains");
+  const [states, setStates] = useState<Record<string, StateInfo>>({});
+  const [loading, setLoading] = useState(true);
+  const [confirmState, setConfirmState] = useState<string | null>(null);
+  const [confirmPos, setConfirmPos] = useState({ x: 0, y: 0 });
+  const [sortKey, setSortKey] = useState<SortKey>("overall");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const pollingRef = useRef<Set<string>>(new Set());
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-function stepIndex(step: string): number {
-  const idx = STEPS.findIndex((s) => s.key === step);
-  return idx >= 0 ? idx : 0;
-}
+  // Initialize state map
+  useEffect(() => {
+    const init: Record<string, StateInfo> = {};
+    for (const code of STATE_CODES) {
+      init[code] = {
+        code,
+        name: US_STATES[code],
+        report: null,
+        pool: null,
+        generating: false,
+        taskId: null,
+        progress: 0,
+        step: "",
+      };
+    }
+    setStates(init);
+  }, []);
 
-// ---------------------------------------------------------------------------
-// Main Page Component
-// ---------------------------------------------------------------------------
-export default function Home() {
-  // -- State ---------------------------------------------------------------
-  const [view, setView] = useState<AppView>("empty");
-  const [reports, setReports] = useState<Report[]>([]);
-  const [loadingReports, setLoadingReports] = useState(true);
-
-  // Select panel
-  const [selectedStates, setSelectedStates] = useState<Set<string>>(new Set());
-
-  // Generation
-  const [tasks, setTasks] = useState<GeneratingTask[]>([]);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // -- Load existing reports on mount --------------------------------------
-  const fetchReports = useCallback(async () => {
-    setLoadingReports(true);
+  // Fetch reports for category
+  const fetchReports = useCallback(async (cat: string) => {
+    setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/reports?product=curtains`);
-      if (res.ok) {
-        const data: Report[] = await res.json();
-        setReports(data);
-        if (data.length > 0) {
-          setView("reports");
+      const res = await fetch(`${API}/reports?product=${cat}`);
+      if (!res.ok) throw new Error("fetch failed");
+      const reports: ReportData[] = await res.json();
+
+      // Load data pools for each report
+      const poolPromises = reports.map(async (r) => {
+        const poolUrl = r.files?.["data_pool.json"];
+        if (!poolUrl) return { code: r.state_code, pool: null };
+        try {
+          const pRes = await fetch(poolUrl);
+          if (pRes.ok) {
+            const pool = await pRes.json();
+            return { code: r.state_code, pool: pool as DataPoolState };
+          }
+        } catch { /* ignore */ }
+        return { code: r.state_code, pool: null };
+      });
+
+      const pools = await Promise.all(poolPromises);
+      const poolMap: Record<string, DataPoolState | null> = {};
+      for (const p of pools) poolMap[p.code] = p.pool;
+
+      setStates((prev) => {
+        const next = { ...prev };
+        // Reset all non-generating states
+        for (const code of STATE_CODES) {
+          if (!next[code].generating) {
+            next[code] = { ...next[code], report: null, pool: null };
+          }
         }
-      }
+        for (const r of reports) {
+          const code = r.state_code;
+          if (next[code]) {
+            next[code] = {
+              ...next[code],
+              report: r,
+              pool: poolMap[code] ?? null,
+              generating: false,
+              taskId: null,
+              progress: 0,
+              step: "",
+            };
+          }
+        }
+        return next;
+      });
     } catch {
-      // API might not be running; stay in empty state
+      // API not available
     } finally {
-      setLoadingReports(false);
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
+    fetchReports(category);
+  }, [category, fetchReports]);
 
-  // -- Selection helpers ---------------------------------------------------
-  const toggleState = (code: string) => {
-    setSelectedStates((prev) => {
-      const next = new Set(prev);
-      if (next.has(code)) next.delete(code);
-      else next.add(code);
-      return next;
-    });
+  // Polling for generating tasks
+  useEffect(() => {
+    const poll = async () => {
+      const codes = Array.from(pollingRef.current);
+      if (codes.length === 0) return;
+
+      for (const code of codes) {
+        const st = states[code];
+        if (!st?.taskId) continue;
+        try {
+          const res = await fetch(`${API}/status/${st.taskId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === "completed" || data.status === "error") {
+              pollingRef.current.delete(code);
+              if (data.status === "completed") {
+                // Refresh all reports
+                setTimeout(() => fetchReports(category), 1000);
+              }
+              setStates((prev) => ({
+                ...prev,
+                [code]: {
+                  ...prev[code],
+                  generating: data.status !== "completed",
+                  progress: data.progress ?? 100,
+                  step: data.step ?? "",
+                },
+              }));
+            } else {
+              setStates((prev) => ({
+                ...prev,
+                [code]: {
+                  ...prev[code],
+                  progress: data.progress ?? 0,
+                  step: data.step ?? "",
+                },
+              }));
+            }
+          }
+        } catch { /* ignore */ }
+      }
+    };
+
+    intervalRef.current = setInterval(poll, 3000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [states, category, fetchReports]);
+
+  // Start generation for a state
+  const startGeneration = async (code: string) => {
+    setConfirmState(null);
+    setStates((prev) => ({
+      ...prev,
+      [code]: { ...prev[code], generating: true, progress: 0, step: "collecting" },
+    }));
+
+    try {
+      const res = await fetch(`${API}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state_code: code, product: category }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStates((prev) => ({
+          ...prev,
+          [code]: { ...prev[code], taskId: data.task_id },
+        }));
+        pollingRef.current.add(code);
+      } else {
+        setStates((prev) => ({
+          ...prev,
+          [code]: { ...prev[code], generating: false },
+        }));
+      }
+    } catch {
+      setStates((prev) => ({
+        ...prev,
+        [code]: { ...prev[code], generating: false },
+      }));
+    }
   };
 
-  const selectAll = () =>
-    setSelectedStates(new Set(Object.keys(US_STATES)));
-  const selectTop10 = () => setSelectedStates(new Set(TOP10_STATES));
-  const clearSelection = () => setSelectedStates(new Set());
+  // Handle state card click
+  const handleCardClick = (code: string, e: React.MouseEvent) => {
+    const info = states[code];
+    if (!info) return;
 
-  // -- Generation ----------------------------------------------------------
-  const startGeneration = async () => {
-    const codes = Array.from(selectedStates);
-    if (codes.length === 0) return;
-
-    const newTasks: GeneratingTask[] = [];
-
-    for (const code of codes) {
-      try {
-        const res = await fetch(`${API_BASE}/generate`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ state_code: code, product: "curtains" }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          newTasks.push({
-            stateCode: code,
-            taskId: data.task_id,
-            status: null,
-          });
-        } else {
-          newTasks.push({
-            stateCode: code,
-            taskId: "",
-            status: {
-              task_id: "",
-              status: "error",
-              progress: 0,
-              step: "collecting",
-            },
-          });
-        }
-      } catch {
-        newTasks.push({
-          stateCode: code,
-          taskId: "",
-          status: {
-            task_id: "",
-            status: "error",
-            progress: 0,
-            step: "collecting",
-          },
-        });
-      }
+    if (info.report) {
+      window.open(`/report/${category}/${code}`, "_blank");
+      return;
     }
 
-    setTasks(newTasks);
-    setView("generating");
+    if (info.generating) return;
+
+    // Show confirm popup near click position
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setConfirmPos({
+      x: Math.min(rect.left, window.innerWidth - 300),
+      y: rect.bottom + 8,
+    });
+    setConfirmState(code);
   };
 
-  // -- Polling for generation status ---------------------------------------
-  useEffect(() => {
-    if (view !== "generating" || tasks.length === 0) return;
+  // Computed: researched states for table
+  const researchedStates = STATE_CODES
+    .filter((code) => states[code]?.report && states[code]?.pool)
+    .map((code) => states[code]);
 
-    const poll = async () => {
-      const updated = await Promise.all(
-        tasks.map(async (t) => {
-          if (!t.taskId || t.status?.status === "completed" || t.status?.status === "error")
-            return t;
-          try {
-            const res = await fetch(`${API_BASE}/status/${t.taskId}`);
-            if (res.ok) {
-              const s: TaskStatus = await res.json();
-              return { ...t, status: s };
-            }
-          } catch {
-            /* ignore */
-          }
-          return t;
-        })
-      );
-      setTasks(updated);
+  // Sort
+  const sortedStates = [...researchedStates].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    switch (sortKey) {
+      case "state": return dir * a.name.localeCompare(b.name);
+      case "overall": return dir * ((a.pool?.overall_score ?? 0) - (b.pool?.overall_score ?? 0));
+      case "market": return dir * ((a.pool?.market_size_score ?? 0) - (b.pool?.market_size_score ?? 0));
+      case "competition": return dir * ((a.pool?.competition_score ?? 0) - (b.pool?.competition_score ?? 0));
+      case "cost": return dir * ((a.pool?.operating_cost_score ?? 0) - (b.pool?.operating_cost_score ?? 0));
+      case "growth": return dir * ((a.pool?.growth_potential_score ?? 0) - (b.pool?.growth_potential_score ?? 0));
+      default: return dir * ((a.pool?.overall_score ?? 0) - (b.pool?.overall_score ?? 0));
+    }
+  });
 
-      // Check if all done
-      const allDone = updated.every(
-        (t) => t.status?.status === "completed" || t.status?.status === "error"
-      );
-      if (allDone && pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-        // Refresh reports after short delay
-        setTimeout(() => {
-          fetchReports();
-          setView("reports");
-        }, 1500);
-      }
-    };
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  };
 
-    pollingRef.current = setInterval(poll, 3000);
-    // Run once immediately
-    poll();
-
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, tasks.length]);
-
-  // -- Computed values -----------------------------------------------------
-  const completedCount = tasks.filter(
-    (t) => t.status?.status === "completed"
+  // Stats
+  const researchedCount = STATE_CODES.filter((c) => states[c]?.report).length;
+  const generatingCount = STATE_CODES.filter((c) => states[c]?.generating).length;
+  const recommendCount = researchedStates.filter(
+    (s) => s.pool?.recommendation?.includes("推荐") || s.pool?.go_nogo?.toLowerCase() === "go"
   ).length;
-  const overallProgress =
-    tasks.length > 0
-      ? Math.round(
-          tasks.reduce((sum, t) => sum + (t.status?.progress ?? 0), 0) /
-            tasks.length
-        )
-      : 0;
 
-  // -----------------------------------------------------------------------
-  // Render
-  // -----------------------------------------------------------------------
+  const lastUpdate = researchedStates.length > 0
+    ? researchedStates.reduce((latest, s) => {
+        const d = s.report?.created_at;
+        return d && d > latest ? d : latest;
+      }, "")
+    : "";
+
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* ---- Header (shown when reports exist or generating) ---- */}
-      {(view === "reports" || view === "generating") && (
-        <header className="flex items-center justify-between px-6 py-4 border-b border-[--border]">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[--accent] to-purple-500 flex items-center justify-center text-white text-sm font-bold">
-              M
+    <div className="min-h-screen flex flex-col">
+      {/* ---- Header ---- */}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#e5e7eb]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
+                   style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                M
+              </div>
+              <span className="font-semibold text-[#111827] text-base hidden sm:inline">MarketScope</span>
             </div>
-            <span className="text-sm font-medium text-[--text-secondary]">
-              市场调研系统
-            </span>
+            <div className="h-6 w-px bg-[#e5e7eb] hidden sm:block" />
+            {/* Category Tabs */}
+            <div className="flex gap-1 bg-[#f3f4f6] p-1 rounded-full">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.key}
+                  onClick={() => setCategory(cat.key)}
+                  className={`tab ${category === cat.key ? "tab-active" : ""}`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
           </div>
-          {view === "reports" && (
-            <button
-              onClick={() => {
-                setSelectedStates(new Set());
-                setView("select");
-              }}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
-                         bg-[--accent] text-white hover:bg-[--accent-hover]
-                         transition-colors cursor-pointer"
-            >
-              <PlusIcon />
-              新建调研
-            </button>
-          )}
-        </header>
-      )}
+          <a href="/workspace" className="btn-secondary text-sm">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <rect x="2" y="2" width="5" height="5" rx="1" />
+              <rect x="9" y="2" width="5" height="5" rx="1" />
+              <rect x="2" y="9" width="5" height="5" rx="1" />
+              <rect x="9" y="9" width="5" height="5" rx="1" />
+            </svg>
+            工作台
+          </a>
+        </div>
+      </header>
 
-      {/* ---- Main Content ---- */}
-      <main className="flex-1 flex flex-col">
-        {/* Loading spinner */}
-        {loadingReports && view === "empty" && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-[--accent] border-t-transparent rounded-full animate-spin" />
+      {/* ---- Main ---- */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <div className="w-8 h-8 border-3 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
           </div>
         )}
 
-        {/* STATE A: Empty */}
-        {!loadingReports && view === "empty" && <EmptyState onNewResearch={() => setView("select")} />}
+        {!loading && (
+          <>
+            {/* Section: 50-State Grid */}
+            <section className="mb-12">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-bold text-[#111827]">美国50州调研总览</h2>
+                  <p className="text-sm text-[#6b7280] mt-1">
+                    点击已调研州查看报告 / 点击未调研州发起调研
+                  </p>
+                </div>
+                {generatingCount > 0 && (
+                  <div className="flex items-center gap-2 text-sm text-[#6366f1]">
+                    <div className="w-4 h-4 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                    {generatingCount} 个州正在生成中
+                  </div>
+                )}
+              </div>
 
-        {/* STATE B: Select Panel */}
-        {view === "select" && (
-          <SelectPanel
-            selectedStates={selectedStates}
-            toggleState={toggleState}
-            selectAll={selectAll}
-            selectTop10={selectTop10}
-            clearSelection={clearSelection}
-            onCancel={() =>
-              setView(reports.length > 0 ? "reports" : "empty")
-            }
-            onStart={startGeneration}
-          />
-        )}
+              <div className="state-grid grid gap-2.5" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+                {STATE_CODES.map((code) => {
+                  const info = states[code];
+                  if (!info) return null;
+                  const hasReport = !!info.report;
+                  const isGenerating = info.generating;
+                  const score = info.pool?.overall_score;
+                  const rec = info.pool?.recommendation ?? info.pool?.go_nogo ?? "";
+                  const isRecommend = rec.includes("推荐") || rec.toLowerCase() === "go";
+                  const isCaution = rec.includes("谨慎") || rec.includes("观望");
+                  const isNotRecommend = rec.includes("不推荐") || rec.toLowerCase() === "no-go" || rec.toLowerCase() === "nogo";
 
-        {/* STATE C: Generating */}
-        {view === "generating" && (
-          <GeneratingView
-            tasks={tasks}
-            completedCount={completedCount}
-            overallProgress={overallProgress}
-          />
-        )}
+                  let barColor = "#10b981"; // green default
+                  if (isCaution) barColor = "#f59e0b";
+                  if (isNotRecommend) barColor = "#ef4444";
 
-        {/* STATE D: Reports */}
-        {view === "reports" && (
-          <ReportsView reports={reports} />
+                  return (
+                    <div
+                      key={code}
+                      onClick={(e) => handleCardClick(code, e)}
+                      className={`
+                        relative flex flex-col items-center justify-center py-3 px-2 transition-all cursor-pointer
+                        ${hasReport ? "state-card" : isGenerating ? "state-card state-card-generating" : "state-card state-card-empty"}
+                      `}
+                      style={{ minHeight: 80 }}
+                    >
+                      {/* Left bar for researched states */}
+                      {hasReport && (
+                        <div className="state-card-bar" style={{ backgroundColor: barColor }} />
+                      )}
+
+                      <span className={`text-base font-bold leading-none ${
+                        hasReport ? "text-[#111827]" : isGenerating ? "text-[#6366f1]" : "text-[#9ca3af]"
+                      }`}>
+                        {code}
+                      </span>
+                      <span className="text-[10px] text-[#9ca3af] mt-1 leading-tight truncate w-full text-center">
+                        {US_STATES[code]}
+                      </span>
+
+                      {hasReport && score !== undefined && (
+                        <span className="text-xs font-semibold mt-1.5" style={{ color: barColor }}>
+                          {score}
+                        </span>
+                      )}
+
+                      {isGenerating && (
+                        <div className="flex items-center gap-1 mt-1.5">
+                          <div className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                          <span className="text-[10px] text-[#6366f1]">生成中</span>
+                        </div>
+                      )}
+
+                      {!hasReport && !isGenerating && (
+                        <span className="text-[10px] text-transparent group-hover:text-[#9ca3af] mt-1.5 opacity-0 hover:opacity-100 transition-opacity">
+                          点击生成
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            {/* Confirm Popup */}
+            {confirmState && (
+              <>
+                <div className="confirm-popup-overlay" onClick={() => setConfirmState(null)} />
+                <div
+                  className="confirm-popup"
+                  style={{ left: confirmPos.x, top: confirmPos.y }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-base font-bold">{confirmState}</span>
+                    <span className="text-sm text-[#6b7280]">{US_STATES[confirmState]}</span>
+                  </div>
+                  <p className="text-sm text-[#6b7280] mb-4">
+                    确认为该州生成 <strong className="text-[#111827]">{CATEGORIES.find(c => c.key === category)?.label}</strong> 市场调研报告？
+                  </p>
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setConfirmState(null)} className="btn-ghost text-sm">
+                      取消
+                    </button>
+                    <button onClick={() => startGeneration(confirmState)} className="btn-primary text-sm">
+                      确认生成
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Section: Ranking Table */}
+            {sortedStates.length > 0 && (
+              <section className="mb-12">
+                <h2 className="text-xl font-bold text-[#111827] mb-6">州排名</h2>
+                <div className="card overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="data-table">
+                      <thead>
+                        <tr className="bg-[#f9fafb]">
+                          <th className="w-16">#</th>
+                          <SortHeader label="州" sortKey="state" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label="综合评分" sortKey="overall" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label="市场规模" sortKey="market" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label="竞争强度" sortKey="competition" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label="运营成本" sortKey="cost" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label="增长潜力" sortKey="growth" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <th>建议</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedStates.map((s, i) => {
+                          const p = s.pool;
+                          const rec = p?.recommendation ?? p?.go_nogo ?? "--";
+                          const isGo = rec.includes("推荐") || rec.toLowerCase() === "go";
+                          const isNo = rec.includes("不推荐") || rec.toLowerCase().includes("no");
+                          return (
+                            <tr
+                              key={s.code}
+                              className="cursor-pointer"
+                              onClick={() => window.open(`/report/${category}/${s.code}`, "_blank")}
+                            >
+                              <td className="text-[#9ca3af] font-medium">{i + 1}</td>
+                              <td>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-[#111827]">{s.code}</span>
+                                  <span className="text-[#6b7280] text-xs">{s.name}</span>
+                                </div>
+                              </td>
+                              <td><ScoreCell value={p?.overall_score} /></td>
+                              <td><ScoreCell value={p?.market_size_score} /></td>
+                              <td><ScoreCell value={p?.competition_score} /></td>
+                              <td><ScoreCell value={p?.operating_cost_score} /></td>
+                              <td><ScoreCell value={p?.growth_potential_score} /></td>
+                              <td>
+                                <span className={`badge ${isGo ? "badge-success" : isNo ? "badge-danger" : "badge-warning"}`}>
+                                  {rec}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* Footer Stats */}
+            <footer className="text-center text-sm text-[#9ca3af] py-6 border-t border-[#e5e7eb]">
+              已调研 <span className="text-[#111827] font-medium">{researchedCount}/50</span> 州
+              {recommendCount > 0 && (
+                <> &middot; 推荐进入 <span className="text-[#10b981] font-medium">{recommendCount}</span> 州</>
+              )}
+              {lastUpdate && (
+                <> &middot; 数据更新于 {new Date(lastUpdate).toLocaleDateString("zh-CN")}</>
+              )}
+            </footer>
+          </>
         )}
       </main>
     </div>
   );
 }
 
-// ===========================================================================
-// Sub-components (co-located in single file)
-// ===========================================================================
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
 
-// ---- Icons (inline SVG) --------------------------------------------------
-function PlusIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M8 3v10M3 8h10" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className = "" }: { className?: string }) {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" className={className}>
-      <path d="M2 7.5l3.5 3.5L12 4" />
-    </svg>
-  );
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-      <path d="M7 2v7.5M3.5 7L7 10.5 10.5 7M2.5 12h9" />
-    </svg>
-  );
-}
-
-function SpinnerIcon() {
-  return (
-    <div className="w-3.5 h-3.5 border-2 border-[--accent] border-t-transparent rounded-full animate-spin" />
-  );
-}
-
-// ---- STATE A: Empty State ------------------------------------------------
-function EmptyState({ onNewResearch }: { onNewResearch: () => void }) {
-  return (
-    <div className="flex-1 flex items-center justify-center relative state-enter">
-      <div className="hero-glow" />
-      <div className="text-center z-10 px-6">
-        <div className="w-14 h-14 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-[--accent] to-purple-500 flex items-center justify-center shadow-lg shadow-[--accent-glow]">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
-            <path d="M3 12h4l3-9 4 18 3-9h4" />
-          </svg>
-        </div>
-        <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-3 bg-gradient-to-r from-white to-[--text-secondary] bg-clip-text text-transparent">
-          市场调研系统
-        </h1>
-        <p className="text-[--text-secondary] text-lg mb-10 max-w-md mx-auto">
-          美国窗帘 / 窗饰零售市场自动分析
-        </p>
-        <button
-          onClick={onNewResearch}
-          className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-xl text-base font-semibold
-                     bg-[--accent] text-white hover:bg-[--accent-hover]
-                     shadow-lg shadow-[--accent-glow]
-                     transition-all duration-200 hover:scale-[1.02] cursor-pointer"
-        >
-          <PlusIcon />
-          新建调研
-        </button>
-        <p className="mt-6 text-xs text-[--text-muted]">
-          支持 50 州独立报告 · 数据采集 · AI 分析 · 自动导出
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ---- STATE B: Select Panel -----------------------------------------------
-function SelectPanel({
-  selectedStates,
-  toggleState,
-  selectAll,
-  selectTop10,
-  clearSelection,
-  onCancel,
-  onStart,
-}: {
-  selectedStates: Set<string>;
-  toggleState: (code: string) => void;
-  selectAll: () => void;
-  selectTop10: () => void;
-  clearSelection: () => void;
-  onCancel: () => void;
-  onStart: () => void;
-}) {
-  const count = selectedStates.size;
-  const estMinutes = Math.ceil(count * MINS_PER_STATE);
-  const estCost = (count * COST_PER_STATE).toFixed(2);
-
-  return (
-    <div className="flex-1 flex flex-col max-w-5xl mx-auto w-full px-4 sm:px-6 py-8 state-enter">
-      {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold mb-1">选择调研州</h2>
-        <p className="text-[--text-secondary] text-sm">
-          品类：窗帘 / 窗饰（Curtains & Window Treatments） · 选择目标州开始生成报告
-        </p>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-2 mb-5">
-        <QuickButton label="全部 50 州" onClick={selectAll} />
-        <QuickButton label="Top 10 经济大州" onClick={selectTop10} />
-        <QuickButton label="清空" onClick={clearSelection} variant="ghost" />
-      </div>
-
-      {/* States Grid */}
-      <div className="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2 mb-8">
-        {Object.entries(US_STATES).map(([code, name]) => {
-          const selected = selectedStates.has(code);
-          return (
-            <button
-              key={code}
-              onClick={() => toggleState(code)}
-              title={name}
-              className={`
-                relative flex flex-col items-center justify-center py-2.5 px-1 rounded-lg text-center
-                border transition-all duration-150 cursor-pointer
-                ${
-                  selected
-                    ? "bg-[--accent]/15 border-[--accent] text-[--accent]"
-                    : "bg-[--bg-card] border-[--border-subtle] text-[--text-secondary] hover:border-[--border] hover:bg-[--bg-card-hover]"
-                }
-              `}
-            >
-              <span className="text-xs font-bold leading-none">{code}</span>
-              <span className="text-[10px] mt-0.5 leading-tight opacity-60 truncate w-full">
-                {name}
-              </span>
-              {selected && (
-                <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[--accent] flex items-center justify-center">
-                  <CheckIcon className="text-white w-2 h-2" />
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Footer */}
-      <div className="mt-auto border-t border-[--border] pt-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="text-sm text-[--text-secondary] flex flex-wrap gap-x-4 gap-y-1">
-          <span>
-            已选 <strong className="text-[--text-primary]">{count}</strong> 州
-          </span>
-          {count > 0 && (
-            <>
-              <span>预计 ~{estMinutes} 分钟</span>
-              <span>~${estCost}</span>
-            </>
-          )}
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            className="px-5 py-2.5 text-sm rounded-lg border border-[--border]
-                       text-[--text-secondary] hover:text-[--text-primary] hover:border-[--text-muted]
-                       transition-colors cursor-pointer"
-          >
-            取消
-          </button>
-          <button
-            disabled={count === 0}
-            onClick={onStart}
-            className="px-5 py-2.5 text-sm font-medium rounded-lg
-                       bg-[--accent] text-white hover:bg-[--accent-hover]
-                       disabled:opacity-40 disabled:cursor-not-allowed
-                       transition-colors cursor-pointer"
-          >
-            开始生成 {count} 份报告
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function QuickButton({
+function SortHeader({
   label,
+  sortKey: key,
+  current,
+  dir,
   onClick,
-  variant = "default",
 }: {
   label: string;
-  onClick: () => void;
-  variant?: "default" | "ghost";
+  sortKey: SortKey;
+  current: SortKey;
+  dir: SortDir;
+  onClick: (key: SortKey) => void;
 }) {
+  const active = current === key;
   return (
-    <button
-      onClick={onClick}
-      className={`
-        px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer
-        ${
-          variant === "ghost"
-            ? "text-[--text-muted] hover:text-[--text-secondary]"
-            : "bg-[--bg-tertiary] text-[--text-secondary] hover:text-[--text-primary] border border-[--border-subtle] hover:border-[--border]"
-        }
-      `}
-    >
-      {label}
-    </button>
+    <th onClick={() => onClick(key)} className={active ? "text-[#6366f1]" : ""}>
+      <div className="flex items-center gap-1">
+        {label}
+        {active && (
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+            {dir === "asc"
+              ? <path d="M6 3L10 8H2L6 3Z" />
+              : <path d="M6 9L2 4H10L6 9Z" />
+            }
+          </svg>
+        )}
+      </div>
+    </th>
   );
 }
 
-// ---- STATE C: Generating View --------------------------------------------
-function GeneratingView({
-  tasks,
-  completedCount,
-  overallProgress,
-}: {
-  tasks: GeneratingTask[];
-  completedCount: number;
-  overallProgress: number;
-}) {
-  return (
-    <div className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-8 state-enter">
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold mb-2">正在生成报告...</h2>
-        <div className="flex items-center gap-4 text-sm text-[--text-secondary]">
-          <span>
-            {completedCount}/{tasks.length} 完成
-          </span>
-          <span>{overallProgress}%</span>
-        </div>
-        {/* Overall progress bar */}
-        <div className="mt-3 h-1.5 rounded-full bg-[--bg-tertiary] overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-[--accent] to-purple-500 transition-all duration-500"
-            style={{ width: `${overallProgress}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Task Cards */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        {tasks.map((task) => (
-          <TaskCard key={task.stateCode} task={task} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TaskCard({ task }: { task: GeneratingTask }) {
-  const st = task.status;
-  const currentStep = st?.step ?? "collecting";
-  const currentIdx = stepIndex(currentStep);
-  const isCompleted = st?.status === "completed";
-  const isError = st?.status === "error";
-
-  return (
-    <div
-      className={`
-        p-4 rounded-xl border transition-colors
-        ${
-          isCompleted
-            ? "border-[--success]/30 bg-[--success]/5"
-            : isError
-            ? "border-[--danger]/30 bg-[--danger]/5"
-            : "border-[--border] bg-[--bg-card]"
-        }
-      `}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">{task.stateCode}</span>
-          <span className="text-xs text-[--text-muted]">
-            {US_STATES[task.stateCode]}
-          </span>
-        </div>
-        {isCompleted && (
-          <span className="text-xs text-[--success] font-medium flex items-center gap-1">
-            <CheckIcon /> 完成
-          </span>
-        )}
-        {isError && (
-          <span className="text-xs text-[--danger] font-medium">失败</span>
-        )}
-        {!isCompleted && !isError && (
-          <span className="text-xs text-[--text-muted]">
-            {st?.progress ?? 0}%
-          </span>
-        )}
-      </div>
-
-      {/* Mini timeline */}
-      <div className="flex gap-1">
-        {STEPS.map((step, i) => {
-          const done = isCompleted || i < currentIdx;
-          const active = !isCompleted && !isError && i === currentIdx;
-          return (
-            <div
-              key={step.key}
-              title={step.label}
-              className={`
-                flex-1 h-1 rounded-full transition-colors duration-300
-                ${
-                  done
-                    ? "bg-[--success]"
-                    : active
-                    ? "bg-[--accent] animate-shimmer"
-                    : "bg-[--bg-tertiary]"
-                }
-              `}
-            />
-          );
-        })}
-      </div>
-
-      {!isCompleted && !isError && (
-        <p className="mt-2 text-[10px] text-[--text-muted]">
-          {STEPS[currentIdx]?.label ?? "准备中"}
-        </p>
-      )}
-    </div>
-  );
-}
-
-// ---- STATE D: Reports View -----------------------------------------------
-function ReportsView({ reports }: { reports: Report[] }) {
-  if (reports.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-[--text-muted] text-sm">
-        暂无报告
-      </div>
-    );
+function ScoreCell({ value }: { value?: number }) {
+  if (value === undefined || value === null) {
+    return <span className="text-[#9ca3af]">--</span>;
   }
 
-  return (
-    <div className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-8 state-enter">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">调研报告</h2>
-          <p className="text-sm text-[--text-secondary] mt-1">
-            共 {reports.length} 份已生成报告
-          </p>
-        </div>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {reports.map((r) => (
-          <ReportCard key={r.state_code} report={r} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ReportCard({ report }: { report: Report }) {
-  const r = report;
-  const goNoGo = r.go_no_go?.toLowerCase();
-  const isGo = goNoGo === "go";
-
-  // Build download links from files object
-  // API returns keys like "report.html", "report_a.docx", "report_b.docx"
-  const downloads: { label: string; url: string }[] = [];
-  if (r.files) {
-    const f = r.files as Record<string, string>;
-    const mapping: [string[], string][] = [
-      [["report.html", "html"], "HTML 报告"],
-      [["report_a.docx", "data_docx"], "数据报告"],
-      [["report_b.docx", "business_docx"], "商业分析"],
-      [["data_pool.json"], "数据池"],
-    ];
-    for (const [keys, label] of mapping) {
-      const url = keys.map(k => f[k]).find(v => v);
-      if (url) {
-        downloads.push({
-          label,
-          url: url.startsWith("http") ? url : supabasePublicUrl(url),
-        });
-      }
-    }
-  }
+  let color = "#10b981";
+  if (value < 40) color = "#ef4444";
+  else if (value < 60) color = "#f59e0b";
+  else if (value < 75) color = "#6366f1";
 
   return (
-    <div className="card-hover p-5 rounded-xl border border-[--border] bg-[--bg-card]">
-      {/* Top row */}
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-lg font-bold">{r.state_code}</span>
-            <span className="text-sm text-[--text-secondary]">
-              {r.state_name}
-            </span>
-          </div>
-          <p className="text-[10px] text-[--text-muted]">
-            {new Date(r.created_at).toLocaleDateString("zh-CN", {
-              year: "numeric",
-              month: "short",
-              day: "numeric",
-            })}
-          </p>
-        </div>
-        {r.go_no_go && (
-          <span
-            className={`
-              px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide
-              ${
-                isGo
-                  ? "bg-[--success]/15 text-[--success]"
-                  : "bg-[--danger]/15 text-[--danger]"
-              }
-            `}
-          >
-            {r.go_no_go}
-          </span>
-        )}
+    <div className="flex items-center gap-2">
+      <span className="text-sm font-semibold w-8" style={{ color }}>{value}</span>
+      <div className="score-bar flex-1">
+        <div className="score-bar-fill" style={{ width: `${value}%`, backgroundColor: color }} />
       </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        {r.population && (
-          <StatBadge label="人口" value={r.population} />
-        )}
-        {r.gdp && <StatBadge label="GDP" value={r.gdp} />}
-        {r.stores && (
-          <StatBadge label="店铺" value={r.stores} />
-        )}
-      </div>
-
-      {/* Preview + Download links */}
-      {downloads.length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-3 border-t border-[--border-subtle]">
-          {/* Online preview button - prominent */}
-          {(() => {
-            const htmlUrl = downloads.find(d => d.label === "HTML 报告")?.url;
-            return htmlUrl ? (
-              <a
-                href={`/preview?url=${encodeURIComponent(htmlUrl)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-bold rounded-md
-                           bg-[--accent]/15 text-[--accent] hover:bg-[--accent]/25
-                           border border-[--accent]/30 hover:border-[--accent]/50
-                           transition-colors"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                在线预览
-              </a>
-            ) : null;
-          })()}
-          {downloads.map((d) => (
-            <a
-              key={d.label}
-              href={d.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              download
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md
-                         bg-[--bg-tertiary] text-[--text-secondary] hover:text-[--text-primary]
-                         border border-[--border-subtle] hover:border-[--border]
-                         transition-colors"
-            >
-              <DownloadIcon />
-              {d.label}
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatBadge({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="text-center p-2 rounded-lg bg-[--bg-tertiary]/50">
-      <p className="text-[10px] text-[--text-muted] mb-0.5">{label}</p>
-      <p className="text-xs font-semibold text-[--text-primary] truncate">
-        {value}
-      </p>
     </div>
   );
 }
