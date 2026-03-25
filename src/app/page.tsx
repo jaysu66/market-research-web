@@ -1731,8 +1731,9 @@ export default function DashboardPage() {
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        .fade-in { opacity: 0; transform: translateY(28px); transition: opacity 0.6s ease, transform 0.6s ease; }
-        .fade-in.visible { opacity: 1; transform: translateY(0); }
+        .fade-in { opacity: 0; transform: translateY(28px); transition: opacity 0.6s ease, transform 0.6s ease; animation: fadeInFallback 0.8s ease forwards; animation-delay: 0.3s; }
+        .fade-in.visible { opacity: 1; transform: translateY(0); animation: none; }
+        @keyframes fadeInFallback { to { opacity: 1; transform: translateY(0); } }
       ` }} />
     </div>
   );
