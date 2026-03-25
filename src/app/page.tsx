@@ -5,9 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "") ||
-  "http://localhost:8080";
+const API_BASE = "/api/proxy";
 const SUPABASE_URL = "https://bbfyfkjcvhpqmjticmsy.supabase.co";
 const SUPABASE_BUCKET = "market-reports";
 
