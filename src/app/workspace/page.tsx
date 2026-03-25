@@ -26,11 +26,26 @@ const US_STATES: Record<string, string> = {
 const STATE_CODES = Object.keys(US_STATES);
 const TOP10 = ["CA", "TX", "NY", "FL", "IL", "PA", "OH", "GA", "NC", "MI"];
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
   { key: "blinds", label: "百叶窗" },
   { key: "shutters", label: "卷帘" },
 ];
+
+function loadCategories(): { key: string; label: string }[] {
+  if (typeof window === "undefined") return DEFAULT_CATEGORIES;
+  try {
+    const saved = localStorage.getItem("market_categories");
+    if (saved) return JSON.parse(saved);
+  } catch { /* ignore */ }
+  return DEFAULT_CATEGORIES;
+}
+
+function saveCategories(cats: { key: string; label: string }[]) {
+  try {
+    localStorage.setItem("market_categories", JSON.stringify(cats));
+  } catch { /* ignore */ }
+}
 
 const COST_PER_STATE = 0.35;
 const MINS_PER_STATE = 2.5;
@@ -61,12 +76,45 @@ export default function WorkspacePage() {
   const [queue, setQueue] = useState<QueueTask[]>([]);
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [isBatchRunning, setIsBatchRunning] = useState(false);
+  const [catList, setCatList] = useState(DEFAULT_CATEGORIES);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newCatLabel, setNewCatLabel] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load saved categories on mount
+  useEffect(() => {
+    setCatList(loadCategories());
+  }, []);
+
+  // Add new category
+  const addCategory = () => {
+    if (!newCatLabel.trim()) return;
+    const key = newCatLabel.trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, "_");
+    if (catList.some((c) => c.key === key)) return;
+    const updated = [...catList, { key, label: newCatLabel.trim() }];
+    setCatList(updated);
+    saveCategories(updated);
+    setNewCatLabel("");
+    setShowAddModal(false);
+    fetchCategories();
+  };
+
+  // Delete category
+  const deleteCategory = (key: string) => {
+    const updated = catList.filter((c) => c.key !== key);
+    setCatList(updated);
+    saveCategories(updated);
+    setDeleteConfirm(null);
+    if (category === key && updated.length > 0) setCategory(updated[0].key);
+    fetchCategories();
+  };
 
   // Fetch category report counts
   const fetchCategories = useCallback(async () => {
+    const currentCats = loadCategories();
     const results: CategoryInfo[] = [];
-    for (const cat of CATEGORIES) {
+    for (const cat of currentCats) {
       try {
         const res = await fetch(`${API}/reports?product=${cat.key}`);
         if (res.ok) {
@@ -231,8 +279,8 @@ export default function WorkspacePage() {
           {/* Category select */}
           <div className="mb-5">
             <label className="text-xs font-medium text-[#6b7280] uppercase tracking-wide mb-2 block">品类选择</label>
-            <div className="flex gap-2">
-              {CATEGORIES.map((cat) => (
+            <div className="flex flex-wrap gap-2">
+              {catList.map((cat) => (
                 <button
                   key={cat.key}
                   onClick={() => setCategory(cat.key)}
@@ -408,10 +456,10 @@ export default function WorkspacePage() {
           <p className="text-sm text-[#6b7280] mb-5">查看各品类调研进度</p>
 
           <div className="space-y-3">
-            {(categories.length > 0 ? categories : CATEGORIES.map((c) => ({ ...c, reportCount: 0 }))).map((cat) => (
+            {(categories.length > 0 ? categories : catList.map((c) => ({ ...c, reportCount: 0 }))).map((cat) => (
               <div
                 key={cat.key}
-                className="flex items-center justify-between p-4 rounded-lg border border-[#e5e7eb] bg-white hover:bg-[#f9fafb] transition-colors"
+                className="flex items-center justify-between p-4 rounded-lg border border-[#e5e7eb] bg-white hover:bg-[#f9fafb] transition-colors group"
               >
                 <div className="flex items-center gap-3">
                   <div
@@ -425,27 +473,93 @@ export default function WorkspacePage() {
                     <p className="text-xs text-[#6b7280]">已调研 {cat.reportCount} 州</p>
                   </div>
                 </div>
-                <a
-                  href={`/?category=${cat.key}`}
-                  className="btn-ghost text-xs"
-                >
-                  查看
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M5 3l4 4-4 4" />
-                  </svg>
-                </a>
+                <div className="flex items-center gap-2">
+                  {deleteConfirm === cat.key ? (
+                    <div className="flex items-center gap-1.5 bg-[#fef2f2] border border-[#fee2e2] rounded-lg px-3 py-1.5">
+                      <span className="text-xs text-[#ef4444]">确认删除？</span>
+                      <button
+                        onClick={() => deleteCategory(cat.key)}
+                        className="text-xs font-medium text-[#ef4444] hover:text-[#dc2626] px-1.5"
+                      >
+                        删除
+                      </button>
+                      <button
+                        onClick={() => setDeleteConfirm(null)}
+                        className="text-xs text-[#6b7280] hover:text-[#111827] px-1.5"
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setDeleteConfirm(cat.key)}
+                        className="opacity-0 group-hover:opacity-100 text-[#9ca3af] hover:text-[#ef4444] transition-all p-1"
+                        title="删除品类"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M2 3.5h10M5.5 3.5V2.5a1 1 0 011-1h1a1 1 0 011 1v1M4 3.5l.5 8a1 1 0 001 1h3a1 1 0 001-1l.5-8" />
+                        </svg>
+                      </button>
+                      <a
+                        href={`/?category=${cat.key}`}
+                        className="btn-ghost text-xs"
+                      >
+                        查看
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                          <path d="M5 3l4 4-4 4" />
+                        </svg>
+                      </a>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
 
-          {/* Add new category (placeholder) */}
+          {/* Add new category */}
           <button
             className="mt-4 w-full py-3 rounded-lg border-2 border-dashed border-[#d1d5db] text-sm text-[#9ca3af]
-                       hover:border-[#6366f1] hover:text-[#6366f1] hover:bg-[#eef2ff] transition-all"
-            disabled
+                       hover:border-[#6366f1] hover:text-[#6366f1] hover:bg-[#eef2ff] transition-all cursor-pointer"
+            onClick={() => setShowAddModal(true)}
           >
             + 添加新品类
           </button>
+
+          {/* Add Category Modal */}
+          {showAddModal && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 w-[400px] max-w-[90vw]">
+                <h3 className="text-base font-bold text-[#111827] mb-1">添加新品类</h3>
+                <p className="text-xs text-[#6b7280] mb-4">输入你要调研的产品品类名称</p>
+                <input
+                  type="text"
+                  value={newCatLabel}
+                  onChange={(e) => setNewCatLabel(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addCategory()}
+                  placeholder="例如：地毯、壁纸、灯具..."
+                  className="w-full px-4 py-2.5 rounded-lg border border-[#d1d5db] text-sm text-[#111827]
+                             placeholder-[#9ca3af] focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
+                  autoFocus
+                />
+                <div className="flex justify-end gap-2 mt-4">
+                  <button
+                    onClick={() => { setShowAddModal(false); setNewCatLabel(""); }}
+                    className="px-4 py-2 text-sm text-[#6b7280] hover:text-[#111827] transition-colors"
+                  >
+                    取消
+                  </button>
+                  <button
+                    onClick={addCategory}
+                    disabled={!newCatLabel.trim()}
+                    className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed text-sm"
+                  >
+                    添加
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
       </main>
     </div>
