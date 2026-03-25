@@ -13,12 +13,29 @@ interface ScatterChartProps {
   }>;
 }
 
+const ratingLabelMap: Record<string, string> = {
+  strongly_recommended: "\u{1F7E2} 强烈推荐",
+  recommended: "\u{1F7E1} 推荐",
+  cautious: "\u{1F7E0} 谨慎",
+  not_recommended: "\u{1F534} 不推荐",
+  // Chinese fallbacks
+  "强烈推荐": "\u{1F7E2} 强烈推荐",
+  "推荐": "\u{1F7E1} 推荐",
+  "一般": "\u{1F7E0} 谨慎",
+  "不推荐": "\u{1F534} 不推荐",
+};
+
 const ratingColor: Record<string, string> = {
+  strongly_recommended: "#22c55e",
+  recommended: "#eab308",
+  cautious: "#f97316",
+  not_recommended: "#ef4444",
+  // Chinese fallbacks
   "强烈推荐": "#22c55e",
   "推荐": "#eab308",
   "一般": "#f97316",
   "不推荐": "#ef4444",
-  // English fallbacks
+  // Letter fallbacks
   "A": "#22c55e",
   "B": "#eab308",
   "C": "#f97316",
@@ -27,6 +44,10 @@ const ratingColor: Record<string, string> = {
 
 function getColor(rating: string): string {
   return ratingColor[rating] ?? "#6366f1";
+}
+
+function getLabel(rating: string): string {
+  return ratingLabelMap[rating] ?? rating;
 }
 
 declare global {
@@ -92,10 +113,14 @@ export default function ScatterChart({ states }: ScatterChartProps) {
     });
 
     const maxTam = Math.max(...states.map((s) => s.tam));
+    const maxDensity = Math.max(...states.map((s) => s.density));
     const minDensity = Math.min(...states.map((s) => s.density));
 
+    // If all densities are 0, set a reasonable y-axis range
+    const yMax = maxDensity === 0 ? 1 : undefined;
+
     const series = Object.entries(groups).map(([rating, data]) => ({
-      name: rating,
+      name: getLabel(rating),
       type: "scatter",
       symbolSize: (val: number[]) => val[2],
       data,
@@ -105,13 +130,13 @@ export default function ScatterChart({ states }: ScatterChartProps) {
         formatter: (p: { data: [number, number, number, string] }) => p.data[3],
         position: "top",
         fontSize: 10,
-        color: "#94a3b8",
+        color: "#64748b",
       },
     }));
 
     // Sweet spot annotation
     series.push({
-      name: "甜蜜区",
+      name: "\u{1F3AF} 甜蜜区",
       type: "scatter" as const,
       symbolSize: () => 0,
       data: [],
@@ -122,25 +147,25 @@ export default function ScatterChart({ states }: ScatterChartProps) {
     chart.setOption({
       backgroundColor: "transparent",
       title: {
-        text: "大市场 × 低竞争 散点图",
-        subtext: "X轴=TAM市场规模，Y轴=竞争密度（越低越好），气泡大小=收入中位数",
+        text: "大市场 \u00D7 低竞争 散点图",
+        subtext: "X轴=TAM市场规模，Y轴=竞争密度（越低越好），气泡大小=综合评分",
         left: "center",
-        textStyle: { color: "#e2e8f0", fontSize: 16, fontWeight: "bold" },
-        subtextStyle: { color: "#94a3b8", fontSize: 12 },
+        textStyle: { color: "#1e293b", fontSize: 16, fontWeight: "bold" },
+        subtextStyle: { color: "#64748b", fontSize: 12 },
       },
       tooltip: {
         trigger: "item",
         formatter: (p: { data: [number, number, number, string, string, number] }) => {
           const d = p.data;
-          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>竞争密度: ${d[1].toFixed(1)} 店/万人<br/>收入中位数: $${(d[5] / 1000).toFixed(0)}K`;
+          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>竞争密度: ${d[1].toFixed(1)} 店/万人<br/>综合评分: ${d[5].toFixed(0)}`;
         },
-        backgroundColor: "#1e293b",
-        borderColor: "#334155",
-        textStyle: { color: "#e2e8f0" },
+        backgroundColor: "#ffffff",
+        borderColor: "#e2e8f0",
+        textStyle: { color: "#1e293b" },
       },
       legend: {
         top: 60,
-        textStyle: { color: "#94a3b8" },
+        textStyle: { color: "#475569" },
       },
       grid: {
         left: 60,
@@ -150,20 +175,21 @@ export default function ScatterChart({ states }: ScatterChartProps) {
       },
       xAxis: {
         name: "TAM 市场规模 ($B)",
-        nameTextStyle: { color: "#94a3b8" },
+        nameTextStyle: { color: "#64748b" },
         type: "value",
-        axisLabel: { color: "#94a3b8", formatter: "${value}B" },
-        axisLine: { lineStyle: { color: "#334155" } },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLabel: { color: "#64748b", formatter: "${value}B" },
+        axisLine: { lineStyle: { color: "#cbd5e1" } },
+        splitLine: { lineStyle: { color: "#f1f5f9" } },
       },
       yAxis: {
         name: "竞争密度 (店/万人)",
-        nameTextStyle: { color: "#94a3b8" },
+        nameTextStyle: { color: "#64748b" },
         type: "value",
         inverse: true,
-        axisLabel: { color: "#94a3b8" },
-        axisLine: { lineStyle: { color: "#334155" } },
-        splitLine: { lineStyle: { color: "#1e293b" } },
+        max: yMax,
+        axisLabel: { color: "#64748b" },
+        axisLine: { lineStyle: { color: "#cbd5e1" } },
+        splitLine: { lineStyle: { color: "#f1f5f9" } },
       },
       graphic: [
         {
@@ -188,7 +214,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
           left: "72%",
           bottom: "12%",
           style: {
-            text: "🎯 甜蜜区\n高TAM + 低密度",
+            text: "\u{1F3AF} 甜蜜区\n高TAM + 低密度",
             fill: "#22c55e",
             fontSize: 12,
             fontWeight: "bold",
@@ -211,13 +237,13 @@ export default function ScatterChart({ states }: ScatterChartProps) {
                 data: [
                   [
                     { xAxis: maxTam * 0.6, yAxis: minDensity },
-                    { xAxis: maxTam * 1.1, yAxis: minDensity + (Math.max(...states.map((s) => s.density)) - minDensity) * 0.35 },
+                    { xAxis: maxTam * 1.1, yAxis: minDensity + (maxDensity - minDensity) * 0.35 || 0.35 },
                   ],
                 ],
                 label: {
                   show: true,
                   position: "inside",
-                  formatter: "🎯 甜蜜区",
+                  formatter: "\u{1F3AF} 甜蜜区",
                   color: "#22c55e",
                   fontSize: 13,
                   fontWeight: "bold",
@@ -237,8 +263,6 @@ export default function ScatterChart({ states }: ScatterChartProps) {
   }, [ready, states]);
 
   return (
-    <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-6">
-      <div ref={chartRef} style={{ width: "100%", height: 500 }} />
-    </div>
+    <div ref={chartRef} style={{ width: "100%", height: 500 }} />
   );
 }

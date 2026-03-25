@@ -165,7 +165,14 @@ function computeScores(raw: RawDataPool): DataPoolState {
     const ct = raw.demographics?.cities;
     if (ct && ct.length > 0) {
       const s = [...ct].sort((a, b) => (b.median_income ?? 0) - (a.median_income ?? 0));
-      rc = s[0]?.name ?? "";
+      const rawRc = s[0]?.name ?? "";
+      rc = rawRc
+        .replace(/ city,.*$/, '')
+        .replace(/ town,.*$/, '')
+        .replace(/ CDP,.*$/, '')
+        .replace(/ village,.*$/, '')
+        .replace(/,.*$/, '')
+        .trim();
     }
     const os = raw.overall_score;
     let rt: string, rl: string, re: string;
@@ -321,7 +328,14 @@ function computeScores(raw: RawDataPool): DataPoolState {
   const cities = raw.demographics?.cities;
   if (cities && cities.length > 0) {
     const sorted = [...cities].sort((a, b) => (b.median_income ?? 0) - (a.median_income ?? 0));
-    recommended_city = sorted[0]?.name ?? "";
+    const rawName = sorted[0]?.name ?? "";
+    recommended_city = rawName
+      .replace(/ city,.*$/, '')
+      .replace(/ town,.*$/, '')
+      .replace(/ CDP,.*$/, '')
+      .replace(/ village,.*$/, '')
+      .replace(/,.*$/, '')
+      .trim();
   }
 
   // --- 4-level rating ---
@@ -1095,14 +1109,16 @@ export default function DashboardPage() {
 
                 {/* Scatter Chart (show when 2+ states) */}
                 {researchedStates.length >= 2 && (
-                  <ScatterChart states={researchedStates.map(s => ({
-                    code: s.code,
-                    name: s.name,
-                    tam: s.pool?.tam ?? 0,
-                    density: s.pool?.competition_density ?? 0,
-                    income: s.pool?.overall_score ?? 0,
-                    rating: s.pool?.rating ?? 'cautious',
-                  }))} />
+                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                    <ScatterChart states={researchedStates.map(s => ({
+                      code: s.code,
+                      name: s.name,
+                      tam: s.pool?.tam ?? 0,
+                      density: s.pool?.competition_density ?? 0,
+                      income: s.pool?.overall_score ?? 0,
+                      rating: s.pool?.rating ?? 'cautious',
+                    }))} />
+                  </div>
                 )}
               </div>
 
