@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { US_MAP_VIEWBOX, US_STATE_PATHS } from "./us-map-paths";
+import ScatterChart from './components/ScatterChart';
+import DimensionTop5 from './components/DimensionTop5';
+import TopStatesCards from './components/TopStatesCards';
+import USMap from './components/USMap';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -103,6 +107,10 @@ interface RawDataPool {
     competition?: unknown[];
     businesses?: unknown[];
   };
+  industry_stats?: {
+    total_establishments?: number;
+    [key: string]: unknown;
+  };
   data_coverage?: unknown[];
   // Also support pre-computed scores if backend provides them
   overall_score?: number;
@@ -125,12 +133,46 @@ interface DataPoolState {
   store_count?: number;
   estimated_revenue?: string;
   go_nogo?: string;
+  tam?: number;              // Total Addressable Market ($B)
+  payback_months?: number;   // 回本月数
+  recommended_city?: string; // 推荐城市（收入最高）
+  rating?: string;           // 'strongly_recommended' | 'recommended' | 'cautious' | 'not_recommended'
+  rating_label?: string;     // 中文标签
+  rating_emoji?: string;     // emoji标识
+  competition_density?: number; // 竞争密度 = store_count / (population / 10000)
 }
 
 /** Compute scores from raw data pool when pre-computed scores are absent */
 function computeScores(raw: RawDataPool): DataPoolState {
-  // If backend already provides scores, use them directly
+  // If backend already provides scores, still compute the new fields
   if (raw.overall_score !== undefined) {
+    const stData = raw.demographics?.state_level?.[0];
+    const p = stData?.population ?? 0;
+    const h = stData?.housing_units ?? 0;
+    const backendTam = h > 0 ? Math.round((h * 65 / 1e9) * 100) / 100 : 0;
+    let sc = 0;
+    if (raw.industry_stats?.total_establishments) {
+      sc = raw.industry_stats.total_establishments;
+    } else if (raw.local_businesses && raw.local_businesses.length > 0) {
+      sc = raw.local_businesses.length;
+    }
+    const cd = p > 0 ? Math.round((sc / (p / 10000)) * 100) / 100 : 0;
+    const rw = 50000;
+    const mc = rw * 2 / 12 + 2200 + 1600 + 2000;
+    const mp = 20000 - mc;
+    const pb = mp > 0 ? Math.round(150000 / mp) : 999;
+    let rc = "";
+    const ct = raw.demographics?.cities;
+    if (ct && ct.length > 0) {
+      const s = [...ct].sort((a, b) => (b.median_income ?? 0) - (a.median_income ?? 0));
+      rc = s[0]?.name ?? "";
+    }
+    const os = raw.overall_score;
+    let rt: string, rl: string, re: string;
+    if (os >= 80 && cd < 0.08) { rt = "strongly_recommended"; rl = "强烈推荐"; re = "\u{1F7E2}"; }
+    else if (os >= 65) { rt = "recommended"; rl = "推荐"; re = "\u{1F7E1}"; }
+    else if (os >= 50) { rt = "cautious"; rl = "谨慎"; re = "\u{1F7E0}"; }
+    else { rt = "not_recommended"; rl = "不推荐"; re = "\u{1F534}"; }
     return {
       overall_score: raw.overall_score,
       market_size_score: raw.market_size_score,
@@ -139,6 +181,14 @@ function computeScores(raw: RawDataPool): DataPoolState {
       growth_potential_score: raw.growth_potential_score,
       recommendation: raw.recommendation,
       go_nogo: raw.go_nogo,
+      tam: backendTam,
+      store_count: sc,
+      payback_months: pb,
+      recommended_city: rc,
+      rating: rt,
+      rating_label: rl,
+      rating_emoji: re,
+      competition_density: cd,
     };
   }
 
@@ -241,6 +291,61 @@ function computeScores(raw: RawDataPool): DataPoolState {
   // Revenue estimate from benchmarks
   const estimated_revenue = raw.industry_benchmarks?.annual_revenue_range ?? "";
 
+  // --- TAM (Total Addressable Market) in $B ---
+  const tam = housing > 0 ? Math.round((housing * 65 / 1e9) * 100) / 100 : 0;
+
+  // --- Store count: prefer industry_stats, fallback to local_businesses ---
+  let store_count = 0;
+  if (raw.industry_stats?.total_establishments) {
+    store_count = raw.industry_stats.total_establishments;
+  } else if (raw.local_businesses && raw.local_businesses.length > 0) {
+    store_count = raw.local_businesses.length;
+  }
+
+  // --- Competition density: stores per 10,000 people ---
+  const competition_density = pop > 0 ? Math.round((store_count / (pop / 10000)) * 100) / 100 : 0;
+
+  // --- Payback months ---
+  const retail_wage = 50000;
+  const monthly_labor = retail_wage * 2 / 12;
+  const monthly_rent = 2200;
+  const monthly_marketing = 1600;
+  const monthly_other = 2000;
+  const monthly_cost = monthly_labor + monthly_rent + monthly_marketing + monthly_other;
+  const monthly_revenue = 20000;
+  const monthly_profit = monthly_revenue - monthly_cost;
+  const payback_months = monthly_profit > 0 ? Math.round(150000 / monthly_profit) : 999;
+
+  // --- Recommended city: highest median_income ---
+  let recommended_city = "";
+  const cities = raw.demographics?.cities;
+  if (cities && cities.length > 0) {
+    const sorted = [...cities].sort((a, b) => (b.median_income ?? 0) - (a.median_income ?? 0));
+    recommended_city = sorted[0]?.name ?? "";
+  }
+
+  // --- 4-level rating ---
+  let rating: string;
+  let rating_label: string;
+  let rating_emoji: string;
+  if (overall_score >= 80 && competition_density < 0.08) {
+    rating = "strongly_recommended";
+    rating_label = "强烈推荐";
+    rating_emoji = "\u{1F7E2}"; // 🟢
+  } else if (overall_score >= 65) {
+    rating = "recommended";
+    rating_label = "推荐";
+    rating_emoji = "\u{1F7E1}"; // 🟡
+  } else if (overall_score >= 50) {
+    rating = "cautious";
+    rating_label = "谨慎";
+    rating_emoji = "\u{1F7E0}"; // 🟠
+  } else {
+    rating = "not_recommended";
+    rating_label = "不推荐";
+    rating_emoji = "\u{1F534}"; // 🔴
+  }
+
   return {
     overall_score,
     market_size_score,
@@ -251,6 +356,14 @@ function computeScores(raw: RawDataPool): DataPoolState {
     go_nogo,
     population: popStr,
     estimated_revenue,
+    tam,
+    store_count,
+    payback_months,
+    recommended_city,
+    rating,
+    rating_label,
+    rating_emoji,
+    competition_density,
   };
 }
 
@@ -302,6 +415,7 @@ export default function DashboardPage() {
   const [showComparePanel, setShowComparePanel] = useState(false);
   const radarChartRef = useRef<HTMLDivElement>(null);
   const echartsLoadedRef = useRef(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const pollingRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -749,11 +863,45 @@ export default function DashboardPage() {
       }, "")
     : "";
 
+  // Aggregate values for Hero
+  const totalStores = researchedStates.reduce((sum, s) => sum + (s.pool?.store_count ?? 0), 0);
+  const totalTAM = researchedStates.reduce((sum, s) => sum + (s.pool?.tam ?? 0), 0).toFixed(1);
+  const stronglyRecommendedCount = researchedStates.filter(s => s.pool?.rating === 'strongly_recommended').length;
+  const avgDensity = researchedStates.length > 0
+    ? (researchedStates.reduce((sum, s) => sum + (s.pool?.competition_density ?? 0), 0) / researchedStates.length).toFixed(2)
+    : "0.00";
+
+  // Current category label
+  const currentCategory = catList.find(c => c.key === category)?.label ?? category;
+
+  // handleStateClick wrapper for USMap (no event needed)
+  const handleStateClick = (code: string) => {
+    const info = states[code];
+    if (!info) return;
+    if (info.report) {
+      window.open(`/report/${category}/${code}`, "_blank");
+      return;
+    }
+    if (info.generating) return;
+    // For USMap clicks without a position, use center screen
+    setConfirmPos({ x: window.innerWidth / 2 - 150, y: window.innerHeight / 2 });
+    setConfirmState(code);
+  };
+
+  // Filtered states for ranking table
+  const filteredStates = sortedStates.filter(s => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return s.code.toLowerCase().includes(q) ||
+           s.name.toLowerCase().includes(q) ||
+           (s.pool?.recommended_city ?? '').toLowerCase().includes(q);
+  });
+
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* ---- Header ---- */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#e5e7eb]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div className="min-h-screen flex flex-col bg-[#fafafa]">
+      {/* ---- Sticky Nav ---- */}
+      <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#e5e7eb]">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
@@ -786,159 +934,197 @@ export default function DashboardPage() {
             工作台
           </a>
         </div>
-      </header>
+      </nav>
 
-      {/* ---- Main ---- */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-        {/* Loading */}
-        {loading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="w-8 h-8 border-3 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-3 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
+
+      {!loading && (
+        <>
+          {/* ---- Dark Hero Header — Manus Style ---- */}
+          <header className="bg-[#09090b] text-white pt-10 pb-16 px-6 relative overflow-hidden">
+            <div className="absolute top-[-200px] right-[-100px] w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.15)_0%,transparent_70%)]" />
+            <div className="max-w-[1400px] mx-auto relative z-10">
+              {/* 数据源标签 */}
+              <div className="flex gap-2 mb-4 flex-wrap">
+                {["Census ACS 2023", "FRED 2024", "BLS 2024", "Census CBP 2022", "Perplexity Sonar"].map(s => (
+                  <span key={s} className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-400">{s}</span>
+                ))}
+              </div>
+              <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
+                美国50州<br />
+                <span className="text-[#818cf8]">{currentCategory}</span>市场调研平台
+              </h1>
+              <p className="text-zinc-400 text-lg max-w-2xl mb-6">
+                基于 Census、FRED、BLS、HUD 官方数据及AI深度搜索，为每个州生成完整的市场调研报告与投资决策建议。
+              </p>
+              {/* 全局统计数字行 */}
+              <div className="flex gap-6 text-sm text-zinc-400 flex-wrap">
+                <span><strong className="text-white">{researchedCount}</strong> 个州已调研</span>
+                <span className="hidden sm:inline">&middot;</span>
+                <span><strong className="text-white">{totalStores}</strong> 家竞争商家</span>
+                <span className="hidden sm:inline">&middot;</span>
+                <span>总TAM <strong className="text-white">${totalTAM}B</strong></span>
+                <span className="hidden sm:inline">&middot;</span>
+                <span><strong className="text-white">{stronglyRecommendedCount}</strong> 个强烈推荐州</span>
+              </div>
+            </div>
+          </header>
+
+          {/* ---- Floating Stat Cards ---- */}
+          <div className="max-w-[1400px] mx-auto px-6 -mt-8 relative z-20 grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
+              <div className="text-xs text-zinc-500 mb-1">全国总TAM</div>
+              <div className="text-2xl font-bold font-mono">${totalTAM}B</div>
+              <div className="text-xs text-zinc-400">窗帘/窗饰市场规模估算</div>
+            </div>
+            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
+              <div className="text-xs text-zinc-500 mb-1">平均竞争密度</div>
+              <div className="text-2xl font-bold font-mono text-[#6366f1]">{avgDensity}</div>
+              <div className="text-xs text-zinc-400">店/万人（已调研均值）</div>
+            </div>
+            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
+              <div className="text-xs text-zinc-500 mb-1">强烈推荐州</div>
+              <div className="text-2xl font-bold font-mono text-emerald-500">{stronglyRecommendedCount} 个</div>
+              <div className="text-xs text-zinc-400">综合评分最优</div>
+            </div>
+            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
+              <div className="text-xs text-zinc-500 mb-1">窗帘店总数</div>
+              <div className="text-2xl font-bold font-mono">{totalStores}</div>
+              <div className="text-xs text-zinc-400">NAICS 442291 [Census CBP]</div>
+            </div>
           </div>
-        )}
 
-        {!loading && (
-          <>
-            {/* Section: Executive Summary */}
-            <section className="mb-10">
-              <div className="card p-6" style={{ background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 50%, #e0e7ff 100%)" }}>
-                {/* Stats row */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                  <SummaryCard label="已调研" value={`${researchedCount}/50`} sub="州" color="#6366f1" />
-                  <SummaryCard label="推荐进入" value={`${recommendCount}`} sub="州" color="#10b981" />
-                  <SummaryCard
-                    label="最高评分"
-                    value={
-                      researchedStates.length > 0
-                        ? researchedStates.reduce((best, s) => ((s.pool?.overall_score ?? 0) > (best.pool?.overall_score ?? 0) ? s : best), researchedStates[0]).code
-                        : "--"
-                    }
-                    sub={
-                      researchedStates.length > 0
-                        ? `${researchedStates.reduce((best, s) => ((s.pool?.overall_score ?? 0) > (best.pool?.overall_score ?? 0) ? s : best), researchedStates[0]).pool?.overall_score ?? 0}分`
-                        : ""
-                    }
-                    color="#8b5cf6"
-                  />
-                  <SummaryCard
-                    label="平均分"
-                    value={
-                      researchedStates.length > 0
-                        ? `${Math.round(researchedStates.reduce((sum, s) => sum + (s.pool?.overall_score ?? 0), 0) / researchedStates.length)}`
-                        : "--"
-                    }
-                    sub="分"
-                    color="#f59e0b"
-                  />
-                </div>
-                {/* AI Summary */}
-                <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 text-sm text-[#374151] leading-relaxed">
-                  <span className="text-[#6366f1] font-semibold">AI 分析摘要：</span>
-                  {researchedStates.length === 0
-                    ? "尚未开始调研，点击下方州卡片开始首次调研。"
-                    : (() => {
-                        const topState = researchedStates.reduce((best, s) =>
-                          (s.pool?.overall_score ?? 0) > (best.pool?.overall_score ?? 0) ? s : best,
-                          researchedStates[0]
-                        );
-                        const goStates = researchedStates.filter(
-                          (s) => s.pool?.recommendation?.includes("推荐") || s.pool?.go_nogo?.toLowerCase() === "go"
-                        );
-                        const goNames = goStates.slice(0, 5).map((s) => s.name).join("、");
-                        const marketScore = topState.pool?.market_size_score ?? 0;
-                        const marketLabel = marketScore >= 70 ? "大" : marketScore >= 40 ? "中" : "小";
-                        const compScore = topState.pool?.competition_score ?? 0;
-                        const compLabel = compScore >= 70 ? "弱" : compScore >= 40 ? "适中" : "强";
-                        return `基于对 ${researchedStates.length} 个州的深度调研分析${goNames ? `，推荐优先进入 ${goNames}` : ""}。${topState.name} 综合评分最高（${topState.pool?.overall_score ?? 0}分），市场规模${marketLabel}且竞争${compLabel}。`;
-                      })()
-                  }
-                </div>
-              </div>
-            </section>
+          {/* ---- Main Content ---- */}
+          <main className="flex-1 max-w-[1400px] mx-auto w-full px-6 pb-8">
 
-            {/* Section: US Map */}
-            <section className="mb-10">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-[#111827]">地理分布</h2>
-                <div className="map-view-toggle">
-                  <button
-                    className={mapView === "tile" ? "active" : ""}
-                    onClick={() => setMapView("tile")}
-                  >
-                    方块
-                  </button>
-                  <button
-                    className={mapView === "svg" ? "active" : ""}
-                    onClick={() => setMapView("svg")}
-                  >
-                    地图
-                  </button>
-                </div>
-              </div>
-              <div className="card p-6">
-                {mapView === "tile" ? (
-                  <>
-                    <div className="us-tile-map">
-                      {STATE_CODES.map((code) => {
-                        const pos = US_MAP_POSITIONS[code];
-                        if (!pos) return null;
-                        const info = states[code];
-                        const hasReport = !!info?.report;
-                        const isGenerating = info?.generating;
-                        const score = info?.pool?.overall_score;
-                        const rec = info?.pool?.recommendation ?? info?.pool?.go_nogo ?? "";
-
-                        let bgColor = "#f3f4f6";
-                        if (hasReport) {
-                          if (rec.includes("推荐") || rec.toLowerCase() === "go") bgColor = "#10b981";
-                          else if (rec.includes("谨慎") || rec.includes("观望")) bgColor = "#f59e0b";
-                          else if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) bgColor = "#ef4444";
-                          else bgColor = "#6366f1";
-                        }
-                        if (isGenerating) bgColor = "#c7d2fe";
-
-                        return (
-                          <div
-                            key={code}
-                            className="map-tile"
-                            style={{
-                              gridColumn: pos[0],
-                              gridRow: pos[1],
-                              backgroundColor: bgColor,
-                            }}
-                            onClick={(e) => handleCardClick(code, e)}
-                            title={`${US_STATES[code]} ${score ? `(${score}分)` : hasReport ? "(已调研)" : "(未调研)"}`}
-                          >
-                            <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
-                              {code}
-                            </span>
-                            {hasReport && score !== undefined && (
-                              <span className="text-[8px] text-white/80">{score}</span>
-                            )}
-                          </div>
-                        );
-                      })}
+            {/* Left-Right Split: Map+Scatter | Top10 */}
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 mb-8">
+              <div className="space-y-6">
+                {/* Map Section */}
+                <section>
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-bold text-[#111827]">地理分布</h2>
+                    <div className="map-view-toggle">
+                      <button
+                        className={mapView === "tile" ? "active" : ""}
+                        onClick={() => setMapView("tile")}
+                      >
+                        方块
+                      </button>
+                      <button
+                        className={mapView === "svg" ? "active" : ""}
+                        onClick={() => setMapView("svg")}
+                      >
+                        地图
+                      </button>
                     </div>
-                  </>
-                ) : (
-                  <SvgMapView
-                    states={states}
-                    onCardClick={handleCardClick}
-                  />
-                )}
-                {/* Legend */}
-                <div className="flex items-center justify-center gap-6 mt-4 text-xs text-[#6b7280]">
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#10b981]"></span> 推荐进入</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#f59e0b]"></span> 谨慎评估</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#ef4444]"></span> 不推荐</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#6366f1]"></span> 已调研</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#c7d2fe]"></span> 生成中</span>
-                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#e5e7eb]"></span> 未调研</span>
-                </div>
-              </div>
-            </section>
+                  </div>
+                  <div className="card p-6">
+                    {mapView === "svg" ? (
+                      <USMap
+                        states={Object.fromEntries(Object.entries(states).map(([code, s]) => [code, {
+                          score: s.pool?.overall_score,
+                          recommendation: s.pool?.rating_label,
+                          population: s.pool?.tam ? `TAM $${s.pool.tam.toFixed(2)}B` : undefined,
+                          income: s.pool?.recommended_city,
+                          status: (s.generating ? 'generating' : s.report ? 'researched' : 'none') as 'generating' | 'researched' | 'none',
+                        }]))}
+                        onStateClick={handleStateClick}
+                      />
+                    ) : (
+                      <>
+                        <div className="us-tile-map">
+                          {STATE_CODES.map((code) => {
+                            const pos = US_MAP_POSITIONS[code];
+                            if (!pos) return null;
+                            const info = states[code];
+                            const hasReport = !!info?.report;
+                            const isGenerating = info?.generating;
+                            const score = info?.pool?.overall_score;
+                            const rec = info?.pool?.recommendation ?? info?.pool?.go_nogo ?? "";
 
-            {/* Section: 50-State Grid */}
+                            let bgColor = "#f3f4f6";
+                            if (hasReport) {
+                              if (rec.includes("推荐") || rec.toLowerCase() === "go") bgColor = "#10b981";
+                              else if (rec.includes("谨慎") || rec.includes("观望")) bgColor = "#f59e0b";
+                              else if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) bgColor = "#ef4444";
+                              else bgColor = "#6366f1";
+                            }
+                            if (isGenerating) bgColor = "#c7d2fe";
+
+                            return (
+                              <div
+                                key={code}
+                                className="map-tile"
+                                style={{
+                                  gridColumn: pos[0],
+                                  gridRow: pos[1],
+                                  backgroundColor: bgColor,
+                                }}
+                                onClick={(e) => handleCardClick(code, e)}
+                                title={`${US_STATES[code]} ${score ? `(${score}分)` : hasReport ? "(已调研)" : "(未调研)"}`}
+                              >
+                                <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
+                                  {code}
+                                </span>
+                                {hasReport && score !== undefined && (
+                                  <span className="text-[8px] text-white/80">{score}</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                    {/* Legend */}
+                    <div className="flex items-center justify-center gap-6 mt-4 text-xs text-[#6b7280] flex-wrap">
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#10b981]"></span> 强烈推荐</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#eab308]"></span> 推荐</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#f59e0b]"></span> 谨慎</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#ef4444]"></span> 不推荐</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#c7d2fe]"></span> 生成中</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#e5e7eb]"></span> 未调研</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Scatter Chart (show when 2+ states) */}
+                {researchedStates.length >= 2 && (
+                  <ScatterChart states={researchedStates.map(s => ({
+                    code: s.code,
+                    name: s.name,
+                    tam: s.pool?.tam ?? 0,
+                    density: s.pool?.competition_density ?? 0,
+                    income: s.pool?.overall_score ?? 0,
+                    rating: s.pool?.rating ?? 'cautious',
+                  }))} />
+                )}
+              </div>
+
+              {/* Right side: Top 10 */}
+              <div>
+                <TopStatesCards
+                  states={sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => ({
+                    rank: i + 1,
+                    code: s.code,
+                    name: s.name,
+                    rating_label: s.pool?.rating_label ?? '未评级',
+                    rating_emoji: s.pool?.rating_emoji ?? '',
+                    recommended_city: s.pool?.recommended_city ?? '',
+                    tam: s.pool?.tam ?? 0,
+                    competition_density: s.pool?.competition_density ?? 0,
+                  }))}
+                  onStateClick={handleStateClick}
+                />
+              </div>
+            </div>
+
+            {/* 50-State Grid */}
             <section className="mb-12">
               <div className="flex items-center justify-between mb-6">
                 <div>
@@ -963,11 +1149,10 @@ export default function DashboardPage() {
                   const isGenerating = info.generating;
                   const score = info.pool?.overall_score;
                   const rec = info.pool?.recommendation ?? info.pool?.go_nogo ?? "";
-                  const isRecommend = rec.includes("推荐") || rec.toLowerCase() === "go";
                   const isCaution = rec.includes("谨慎") || rec.includes("观望");
                   const isNotRecommend = rec.includes("不推荐") || rec.toLowerCase() === "no-go" || rec.toLowerCase() === "nogo";
 
-                  let barColor = "#10b981"; // green default
+                  let barColor = "#10b981";
                   if (isCaution) barColor = "#f59e0b";
                   if (isNotRecommend) barColor = "#ef4444";
 
@@ -981,7 +1166,6 @@ export default function DashboardPage() {
                       `}
                       style={{ minHeight: 80 }}
                     >
-                      {/* Left bar for researched states */}
                       {hasReport && (
                         <div className="state-card-bar" style={{ backgroundColor: barColor }} />
                       )}
@@ -1096,12 +1280,31 @@ export default function DashboardPage() {
               </>
             )}
 
+            {/* Dimension Top 5 */}
+            {researchedStates.length >= 3 && (
+              <DimensionTop5 states={researchedStates.map(s => ({
+                code: s.code,
+                name: s.name,
+                tam: s.pool?.tam ?? 0,
+                income: s.pool?.overall_score ?? 0,
+                growth: s.pool?.growth_potential_score ?? 0,
+                competition: 100 - (s.pool?.competition_score ?? 50),
+              }))} />
+            )}
+
             {/* Section: Ranking Table */}
             {sortedStates.length > 0 && (
               <section className="mb-12">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-xl font-bold text-[#111827]">州排名</h2>
                   <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      placeholder="搜索州名/城市..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="px-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/30"
+                    />
                     {compareMode && compareSelected.length >= 2 && (
                       <button
                         onClick={openComparePanel}
@@ -1168,20 +1371,22 @@ export default function DashboardPage() {
                           {compareMode && <th className="w-12"></th>}
                           <th className="w-16">#</th>
                           <SortHeader label="州" sortKey="state" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <th>评级</th>
                           <SortHeader label="综合评分" sortKey="overall" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="市场规模" sortKey="market" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="竞争强度" sortKey="competition" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="运营成本" sortKey="cost" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="增长潜力" sortKey="growth" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <th>建议</th>
+                          <th>窗帘店数</th>
+                          <th>竞争密度</th>
+                          <th>TAM($B)</th>
+                          <th>回本(月)</th>
+                          <th>推荐城市</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {sortedStates.map((s, i) => {
+                        {filteredStates.map((s, i) => {
                           const p = s.pool;
-                          const rec = p?.recommendation ?? p?.go_nogo ?? "--";
-                          const isGo = rec.includes("推荐") || rec.toLowerCase() === "go";
-                          const isNo = rec.includes("不推荐") || rec.toLowerCase().includes("no");
                           return (
                             <tr
                               key={s.code}
@@ -1212,16 +1417,21 @@ export default function DashboardPage() {
                                   <span className="text-[#6b7280] text-xs">{s.name}</span>
                                 </div>
                               </td>
+                              <td>
+                                <span className="text-sm whitespace-nowrap">
+                                  {p?.rating_emoji ?? ''} {p?.rating_label ?? '--'}
+                                </span>
+                              </td>
                               <td><ScoreCell value={p?.overall_score} /></td>
                               <td><ScoreCell value={p?.market_size_score} /></td>
                               <td><ScoreCell value={p?.competition_score} /></td>
                               <td><ScoreCell value={p?.operating_cost_score} /></td>
                               <td><ScoreCell value={p?.growth_potential_score} /></td>
-                              <td>
-                                <span className={`badge ${isGo ? "badge-success" : isNo ? "badge-danger" : "badge-warning"}`}>
-                                  {rec}
-                                </span>
-                              </td>
+                              <td className="text-sm text-[#374151] font-mono">{p?.store_count ?? '--'}</td>
+                              <td className="text-sm text-[#374151] font-mono">{p?.competition_density?.toFixed(2) ?? '--'}</td>
+                              <td className="text-sm text-[#374151] font-mono">${p?.tam?.toFixed(2) ?? '--'}</td>
+                              <td className="text-sm text-[#374151] font-mono">{p?.payback_months ?? '--'}</td>
+                              <td className="text-sm text-[#6b7280] max-w-[120px] truncate">{p?.recommended_city || '--'}</td>
                             </tr>
                           );
                         })}
@@ -1231,20 +1441,15 @@ export default function DashboardPage() {
                 </div>
               </section>
             )}
+          </main>
 
-            {/* Footer Stats */}
-            <footer className="text-center text-sm text-[#9ca3af] py-6 border-t border-[#e5e7eb]">
-              已调研 <span className="text-[#111827] font-medium">{researchedCount}/50</span> 州
-              {recommendCount > 0 && (
-                <> &middot; 推荐进入 <span className="text-[#10b981] font-medium">{recommendCount}</span> 州</>
-              )}
-              {lastUpdate && (
-                <> &middot; 数据更新于 {new Date(lastUpdate).toLocaleDateString("zh-CN")}</>
-              )}
-            </footer>
-          </>
-        )}
-      </main>
+          {/* Footer */}
+          <footer className="text-center py-8 text-xs text-zinc-400">
+            <p>数据来源：US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026</p>
+            <p className="mt-1">报告更新于 2026年3月 &middot; 仅供参考，不构成投资建议</p>
+          </footer>
+        </>
+      )}
 
       {/* ---- Compare Panel (Slide Up) ---- */}
       {showComparePanel && compareSelected.length >= 2 && (
