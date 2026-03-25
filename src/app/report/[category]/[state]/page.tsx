@@ -97,9 +97,9 @@ export default async function ReportPage({
     // supabase unreachable
   }
 
-  // Get HTML URL for iframe (report.html is a full document with scripts/styles)
+  // Get HTML URL for iframe — proxy through our API to strip Supabase's restrictive CSP
   if (report?.files?.["report.html"]) {
-    htmlUrl = report.files["report.html"];
+    htmlUrl = `/api/report-html?url=${encodeURIComponent(report.files["report.html"])}`;
   }
 
   // Fetch data pool
