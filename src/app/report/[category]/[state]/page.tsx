@@ -181,8 +181,8 @@ export default async function ReportPage({
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        {/* Key Insights Card */}
-        {pool && (
+        {/* Key Insights Card — only show when Go/No-Go data exists */}
+        {pool && goNogo && (
           <div
             className="mb-8 p-6 rounded-2xl border border-[#e5e7eb] overflow-hidden relative"
             style={{ background: "linear-gradient(135deg, #eef2ff, #f5f3ff, #fdf2f8)" }}

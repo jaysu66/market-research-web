@@ -39,11 +39,20 @@ const US_MAP_POSITIONS: Record<string, [number, number]> = {
   AK: [1, 8], HI: [2, 8],
 };
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
   { key: "blinds", label: "百叶窗" },
   { key: "shutters", label: "卷帘" },
 ];
+
+function loadCategories(): { key: string; label: string }[] {
+  if (typeof window === "undefined") return DEFAULT_CATEGORIES;
+  try {
+    const saved = localStorage.getItem("market_categories");
+    if (saved) return JSON.parse(saved);
+  } catch { /* ignore */ }
+  return DEFAULT_CATEGORIES;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -113,6 +122,7 @@ function getStepLabel(step: string): string {
 // ---------------------------------------------------------------------------
 export default function DashboardPage() {
   const [category, setCategory] = useState("curtains");
+  const [catList, setCatList] = useState(DEFAULT_CATEGORIES);
   const [states, setStates] = useState<Record<string, StateInfo>>({});
   const [loading, setLoading] = useState(true);
   const [confirmState, setConfirmState] = useState<string | null>(null);
@@ -122,6 +132,11 @@ export default function DashboardPage() {
   const [mapView, setMapView] = useState<"tile" | "svg">("tile");
   const pollingRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Load categories from localStorage
+  useEffect(() => {
+    setCatList(loadCategories());
+  }, []);
 
   // Initialize state map
   useEffect(() => {
@@ -397,7 +412,7 @@ export default function DashboardPage() {
             <div className="h-6 w-px bg-[#e5e7eb] hidden sm:block" />
             {/* Category Tabs */}
             <div className="flex gap-1 bg-[#f3f4f6] p-1 rounded-full">
-              {CATEGORIES.map((cat) => (
+              {catList.map((cat) => (
                 <button
                   key={cat.key}
                   onClick={() => setCategory(cat.key)}
@@ -714,7 +729,7 @@ export default function DashboardPage() {
                     <span className="text-sm text-[#6b7280]">{US_STATES[confirmState]}</span>
                   </div>
                   <p className="text-sm text-[#6b7280] mb-4">
-                    确认为该州生成 <strong className="text-[#111827]">{CATEGORIES.find(c => c.key === category)?.label}</strong> 市场调研报告？
+                    确认为该州生成 <strong className="text-[#111827]">{catList.find(c => c.key === category)?.label}</strong> 市场调研报告？
                   </p>
                   <div className="flex gap-2 justify-end">
                     <button onClick={() => setConfirmState(null)} className="btn-ghost text-sm">
