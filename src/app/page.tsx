@@ -1016,9 +1016,8 @@ export default function DashboardPage() {
           {/* ---- Main Content ---- */}
           <main className="flex-1 max-w-[1400px] mx-auto w-full px-6 pb-8">
 
-            {/* Left-Right Split: Map+Scatter | Top10 */}
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-6 mb-8">
-              <div className="space-y-6">
+            {/* Map + Scatter + Top10 — full width stacked */}
+            <div className="space-y-6 mb-8">
                 {/* Map Section */}
                 <section>
                   <div className="flex items-center justify-between mb-4">
@@ -1114,24 +1113,56 @@ export default function DashboardPage() {
                     }))} />
                   </div>
                 )}
-              </div>
 
-              {/* Right side: Top 10 */}
-              <div>
-                <TopStatesCards
-                  states={sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => ({
-                    rank: i + 1,
-                    code: s.code,
-                    name: s.name,
-                    rating_label: s.pool?.rating_label ?? '未评级',
-                    rating_emoji: s.pool?.rating_emoji ?? '',
-                    recommended_city: s.pool?.recommended_city ?? '',
-                    tam: s.pool?.tam ?? 0,
-                    competition_density: s.pool?.competition_density ?? 0,
-                  }))}
-                  onStateClick={handleStateClick}
-                />
-              </div>
+                {/* Top 10 推荐州 — 横向滚动卡片 */}
+                {researchedStates.length > 0 && (
+                  <section>
+                    <div className="flex items-center justify-between mb-4">
+                      <div>
+                        <h2 className="text-xl font-bold text-[#111827]">Top 10 推荐州</h2>
+                        <p className="text-sm text-gray-500">按综合评分排名 · 点击查看详细报告</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                      {sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => {
+                        const ratingColors: Record<string, string> = {
+                          '强烈推荐': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                          '推荐': 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                          '谨慎': 'bg-orange-50 text-orange-700 border-orange-200',
+                          '不推荐': 'bg-red-50 text-red-700 border-red-200',
+                        };
+                        const label = s.pool?.rating_label ?? '未评级';
+                        const colorCls = ratingColors[label] ?? 'bg-gray-50 text-gray-700 border-gray-200';
+                        return (
+                          <div
+                            key={s.code}
+                            onClick={() => handleStateClick(s.code)}
+                            className="flex-shrink-0 w-[220px] bg-white rounded-xl border border-gray-200 p-4 cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-lg font-bold text-[#6366f1]">#{i + 1}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full border ${colorCls}`}>
+                                {s.pool?.rating_emoji} {label}
+                              </span>
+                            </div>
+                            <div className="font-bold text-gray-900 text-base mb-1">{s.name}</div>
+                            <div className="text-xs text-gray-500 mb-3">📍 {s.pool?.recommended_city || s.code}</div>
+                            <div className="flex justify-between text-xs">
+                              <div>
+                                <div className="text-gray-400">TAM</div>
+                                <div className="font-bold text-indigo-600">${(s.pool?.tam ?? 0).toFixed(1)}B</div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-gray-400">竞争密度</div>
+                                <div className="font-bold text-emerald-600">{(s.pool?.competition_density ?? 0).toFixed(2)}</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
             </div>
 
             {/* 50-State Grid */}
