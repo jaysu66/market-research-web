@@ -1114,48 +1114,42 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {/* Top 10 推荐州 — 横向滚动卡片 */}
+                {/* Top 10 推荐州 — 5列网格（Manus风格） */}
                 {researchedStates.length > 0 && (
                   <section>
-                    <div className="flex items-center justify-between mb-4">
-                      <div>
-                        <h2 className="text-xl font-bold text-[#111827]">Top 10 推荐州</h2>
-                        <p className="text-sm text-gray-500">按综合评分排名 · 点击查看详细报告</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: 'thin' }}>
+                    <h2 className="text-xl font-bold text-zinc-900 mb-2">Top 10 推荐州</h2>
+                    <p className="text-sm text-zinc-500 mb-4">按综合评分（市场规模+消费能力+增长潜力+竞争友好+运营成本）排名</p>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                       {sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => {
                         const ratingColors: Record<string, string> = {
-                          '强烈推荐': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-                          '推荐': 'bg-yellow-50 text-yellow-700 border-yellow-200',
-                          '谨慎': 'bg-orange-50 text-orange-700 border-orange-200',
-                          '不推荐': 'bg-red-50 text-red-700 border-red-200',
+                          '强烈推荐': 'bg-emerald-50 text-emerald-700',
+                          '推荐': 'bg-yellow-50 text-yellow-700',
+                          '谨慎': 'bg-orange-50 text-orange-700',
+                          '不推荐': 'bg-red-50 text-red-700',
                         };
                         const label = s.pool?.rating_label ?? '未评级';
-                        const colorCls = ratingColors[label] ?? 'bg-gray-50 text-gray-700 border-gray-200';
+                        const colorCls = ratingColors[label] ?? 'bg-gray-50 text-gray-700';
                         return (
                           <div
                             key={s.code}
                             onClick={() => handleStateClick(s.code)}
-                            className="flex-shrink-0 w-[220px] bg-white rounded-xl border border-gray-200 p-4 cursor-pointer hover:shadow-lg hover:-translate-y-1 transition-all"
+                            className="bg-white border border-zinc-200 rounded-xl p-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200 cursor-pointer"
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-lg font-bold text-[#6366f1]">#{i + 1}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full border ${colorCls}`}>
+                            <div className="flex items-start justify-between mb-2">
+                              <span className="text-2xl font-black text-zinc-100" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{i + 1}</span>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${colorCls}`}>
                                 {s.pool?.rating_emoji} {label}
                               </span>
                             </div>
-                            <div className="font-bold text-gray-900 text-base mb-1">{s.name}</div>
-                            <div className="text-xs text-gray-500 mb-3">📍 {s.pool?.recommended_city || s.code}</div>
-                            <div className="flex justify-between text-xs">
-                              <div>
-                                <div className="text-gray-400">TAM</div>
-                                <div className="font-bold text-indigo-600">${(s.pool?.tam ?? 0).toFixed(1)}B</div>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-gray-400">竞争密度</div>
-                                <div className="font-bold text-emerald-600">{(s.pool?.competition_density ?? 0).toFixed(2)}</div>
-                              </div>
+                            <div className="font-bold text-sm mb-0.5">{s.name}</div>
+                            <div className="text-xs text-zinc-400 mb-2">{s.pool?.recommended_city || s.code}</div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-zinc-400">TAM</span>
+                              <span className="font-mono font-semibold text-blue-600">${(s.pool?.tam ?? 0).toFixed(1)}B</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs mt-1">
+                              <span className="text-zinc-400">竞争密度</span>
+                              <span className="font-mono">{(s.pool?.competition_density ?? 0).toFixed(2)}</span>
                             </div>
                           </div>
                         );
@@ -1165,8 +1159,8 @@ export default function DashboardPage() {
                 )}
             </div>
 
-            {/* 50-State Grid — hidden, use map instead */}
-            <section className="mb-12" style={{ display: 'none' }}>
+            {/* 50-State Grid — removed, ranking table serves as overview */}
+            <section className="mb-8" style={{ display: 'none' }}>
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-[#111827]">美国50州调研总览</h2>
@@ -1182,7 +1176,7 @@ export default function DashboardPage() {
                 )}
               </div>
 
-              <div className="state-grid grid gap-2.5" style={{ gridTemplateColumns: "repeat(5, 1fr)" }}>
+              <div className="state-grid grid gap-1.5" style={{ gridTemplateColumns: "repeat(10, 1fr)" }}>
                 {STATE_CODES.map((code) => {
                   const info = states[code];
                   if (!info) return null;
@@ -1205,7 +1199,7 @@ export default function DashboardPage() {
                         relative flex flex-col items-center justify-center py-3 px-2 transition-all cursor-pointer
                         ${hasReport ? "state-card" : isGenerating ? "state-card state-card-generating" : "state-card state-card-empty"}
                       `}
-                      style={{ minHeight: 80 }}
+                      style={{ minHeight: 56 }}
                     >
                       {hasReport && (
                         <div className="state-card-bar" style={{ backgroundColor: barColor }} />
