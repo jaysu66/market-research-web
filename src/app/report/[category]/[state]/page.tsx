@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-const API_BACKEND = process.env.API_BACKEND_URL || "http://8.140.216.113";
+const SUPABASE_URL = "https://bbfyfkjcvhpqmjticmsy.supabase.co";
+const SUPABASE_BUCKET = "market-reports";
 
 const US_STATES: Record<string, string> = {
   AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas",
@@ -47,12 +48,20 @@ interface ReportData {
 }
 
 interface DataPool {
-  overall_score?: number;
-  population?: string;
-  store_count?: number;
-  estimated_revenue?: string;
-  go_nogo?: string;
-  recommendation?: string;
+  demographics?: {
+    state_level?: Array<{
+      population?: number;
+      median_income?: number;
+      median_home_value?: number;
+      housing_units?: number;
+    }>;
+  };
+  economy?: Record<string, unknown>;
+  industry_stats?: Record<string, unknown>;
+  // Extracted summary fields (computed)
+  _population?: string;
+  _income?: string;
+  _housing?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -70,21 +79,22 @@ export default async function ReportPage({
 
   if (!stateName) notFound();
 
-  // Fetch reports from backend
+  // Fetch reports from Supabase (no backend needed)
   let report: ReportData | null = null;
   let htmlContent = "";
   let pool: DataPool | null = null;
 
   try {
-    const res = await fetch(`${API_BACKEND}/reports?product=${category}`, {
-      next: { revalidate: 60 },
-    });
+    const indexUrl = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${category}/index.json`;
+    const res = await fetch(indexUrl, { next: { revalidate: 30 } });
     if (res.ok) {
       const reports: ReportData[] = await res.json();
-      report = reports.find((r) => r.state_code.toUpperCase() === stateCode) || null;
+      // Find latest report for this state
+      const matches = reports.filter((r) => r.state_code.toUpperCase() === stateCode);
+      report = matches.length > 0 ? matches[matches.length - 1] : null;
     }
   } catch {
-    // backend unreachable
+    // supabase unreachable
   }
 
   // Fetch HTML content
@@ -111,6 +121,18 @@ export default async function ReportPage({
     } catch { /* ignore */ }
   }
 
+  // Extract summary from data pool
+  const stateData = pool?.demographics?.state_level?.[0];
+  const population = stateData?.population;
+  const income = stateData?.median_income;
+  const homeValue = stateData?.median_home_value;
+  const housingUnits = stateData?.housing_units;
+
+  const popStr = population ? (population > 1000000 ? `${(population / 1000000).toFixed(1)}M` : `${(population / 1000).toFixed(0)}K`) : null;
+  const incomeStr = income ? `$${income.toLocaleString()}` : null;
+  const homeStr = homeValue ? `$${homeValue.toLocaleString()}` : null;
+  const housingStr = housingUnits ? (housingUnits > 1000000 ? `${(housingUnits / 1000000).toFixed(1)}M` : `${(housingUnits / 1000).toFixed(0)}K`) : null;
+
   // Download links
   const downloads: { label: string; icon: string; url: string }[] = [];
   if (report?.files?.["report_a.docx"]) {
@@ -120,9 +142,7 @@ export default async function ReportPage({
     downloads.push({ label: "商业分析", icon: "chart", url: report.files["report_b.docx"] });
   }
 
-  const goNogo = pool?.go_nogo ?? pool?.recommendation ?? "";
-  const isGo = goNogo.toLowerCase().includes("go") && !goNogo.toLowerCase().includes("no");
-  const isGoText = goNogo.includes("推荐") || isGo;
+  const hasData = !!stateData;
 
   return (
     <div className="min-h-screen bg-[#f8f9fa]">
@@ -181,50 +201,18 @@ export default async function ReportPage({
       </header>
 
       <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        {/* Key Insights Card — only show when Go/No-Go data exists */}
-        {pool && goNogo && (
+        {/* Key Data Card — show when data exists */}
+        {hasData && (
           <div
             className="mb-8 p-6 rounded-2xl border border-[#e5e7eb] overflow-hidden relative"
             style={{ background: "linear-gradient(135deg, #eef2ff, #f5f3ff, #fdf2f8)" }}
           >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-bold ${
-                      isGoText
-                        ? "bg-[#10b981] text-white"
-                        : "bg-[#ef4444] text-white"
-                    }`}
-                  >
-                    {isGoText ? (
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 8.5l3.5 3.5L13 5" />
-                      </svg>
-                    ) : (
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M4 4l8 8M12 4l-8 8" />
-                      </svg>
-                    )}
-                    {isGoText ? "建议进入" : "暂不建议"}
-                  </span>
-                  {pool.overall_score !== undefined && (
-                    <span className="text-2xl font-bold text-[#111827]">{pool.overall_score}<span className="text-sm text-[#6b7280] font-normal">/100</span></span>
-                  )}
-                </div>
-                <p className="text-sm text-[#6b7280]">{stateName} {categoryLabel}市场综合评估</p>
-              </div>
-              <div className="flex gap-6">
-                {pool.population && (
-                  <KeyStat label="人口" value={pool.population} />
-                )}
-                {pool.store_count !== undefined && (
-                  <KeyStat label="现有店铺" value={String(pool.store_count)} />
-                )}
-                {pool.estimated_revenue && (
-                  <KeyStat label="预计年营收" value={pool.estimated_revenue} />
-                )}
-              </div>
+            <p className="text-xs font-medium text-[#6366f1] uppercase tracking-wide mb-3">核心数据 · Census ACS 2023</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {popStr && <KeyStat label="州人口" value={popStr} />}
+              {incomeStr && <KeyStat label="家庭收入中位数" value={incomeStr} />}
+              {homeStr && <KeyStat label="房价中位数" value={homeStr} />}
+              {housingStr && <KeyStat label="住房单元" value={housingStr} />}
             </div>
           </div>
         )}
