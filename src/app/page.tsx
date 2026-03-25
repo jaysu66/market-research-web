@@ -92,6 +92,7 @@ interface RawDataPool {
       median_income?: number;
     }>;
   };
+  local_businesses?: unknown[];
   industry_benchmarks?: {
     annual_revenue_range?: string;
     custom_gross_margin?: string;
@@ -102,7 +103,9 @@ interface RawDataPool {
     pricing?: unknown[];
     rent?: unknown[];
     competition?: unknown[];
+    businesses?: unknown[];
   };
+  data_coverage?: unknown[];
   // Also support pre-computed scores if backend provides them
   overall_score?: number;
   market_size_score?: number;
@@ -142,58 +145,100 @@ function computeScores(raw: RawDataPool): DataPoolState {
   }
 
   const stateData = raw.demographics?.state_level?.[0];
-  if (!stateData) return {};
+  const pop = stateData?.population ?? 0;
+  const income = stateData?.median_income ?? 0;
+  const housing = stateData?.housing_units ?? 0;
 
-  const pop = stateData.population ?? 0;
-  const income = stateData.median_income ?? 0;
-  const homeValue = stateData.median_home_value ?? 0;
-  const housing = stateData.housing_units ?? 0;
-  const cityCount = raw.demographics?.cities?.length ?? 0;
+  // --- Market Size Score (0-100): based on population and housing_units ---
+  let market_size_score: number;
+  if (pop > 10000000) {
+    market_size_score = Math.min(100, 90 + Math.round((pop - 10000000) / 5000000));
+  } else if (pop > 5000000) {
+    market_size_score = 70 + Math.round(((pop - 5000000) / 5000000) * 20);
+  } else if (pop > 1000000) {
+    market_size_score = 50 + Math.round(((pop - 1000000) / 4000000) * 20);
+  } else if (pop > 0) {
+    market_size_score = 30 + Math.round((pop / 1000000) * 20);
+  } else {
+    market_size_score = 30;
+  }
+  // Boost for high housing units
+  if (housing > 5000000) {
+    market_size_score = Math.min(100, market_size_score + 5);
+  }
 
-  // Market size score: based on population and housing units
-  // TX has ~30M pop, ~12M housing — scale relative to that as "large"
-  const popScore = Math.min(100, Math.round((pop / 30000000) * 80));
-  const housingScore = Math.min(100, Math.round((housing / 10000000) * 80));
-  const market_size_score = Math.min(100, Math.round((popScore + housingScore) / 2));
+  // --- Competition Score (0-100): based on local_businesses count / population ratio ---
+  const bizCount = (raw.local_businesses?.length ?? 0) +
+    (raw.search_extracted?.businesses?.length ?? 0) +
+    (raw.search_extracted?.competition?.length ?? 0);
+  let competition_score: number;
+  if (bizCount === 0 || pop === 0) {
+    competition_score = 50; // No data, default moderate
+  } else {
+    // Businesses per million people — lower ratio = less competition = higher score
+    const bizPerMillion = (bizCount / pop) * 1000000;
+    if (bizPerMillion > 200) {
+      competition_score = 25;
+    } else if (bizPerMillion > 100) {
+      competition_score = 40;
+    } else if (bizPerMillion > 50) {
+      competition_score = 55;
+    } else if (bizPerMillion > 20) {
+      competition_score = 70;
+    } else {
+      competition_score = 85;
+    }
+  }
 
-  // Competition score: higher = less competition = better
-  // If no competition data, assume moderate
-  const hasCompData = raw.search_extracted?.competition?.some(
-    (c: unknown) => c && typeof c === "object" && !("no_data" in (c as Record<string, unknown>))
-  );
-  const competition_score = hasCompData ? 45 : 60; // No data means less saturated
+  // --- Operating Cost Score (0-100): based on median_income (inverse — high income = high cost = low score) ---
+  let operating_cost_score: number;
+  if (income > 80000) {
+    operating_cost_score = 30 + Math.round(((100000 - Math.min(income, 100000)) / 20000) * 10);
+  } else if (income > 60000) {
+    operating_cost_score = 50 + Math.round(((80000 - income) / 20000) * 10);
+  } else if (income > 40000) {
+    operating_cost_score = 70 + Math.round(((60000 - income) / 20000) * 10);
+  } else if (income > 0) {
+    operating_cost_score = 80 + Math.round(((40000 - Math.max(income, 20000)) / 20000) * 10);
+  } else {
+    operating_cost_score = 50; // No data
+  }
+  operating_cost_score = Math.max(0, Math.min(100, operating_cost_score));
 
-  // Operating cost score: higher = lower cost = better
-  // Based on median rent and income levels
-  const rentRatio = homeValue > 0 ? income / homeValue : 0;
-  const operating_cost_score = Math.min(100, Math.round(rentRatio * 200 + 20));
+  // --- Growth Potential Score (0-100): based on housing_units growth proxy + population ---
+  let growth_potential_score: number;
+  const popFactor = Math.min(100, Math.round((pop / 20000000) * 60));
+  const housingFactor = Math.min(100, Math.round((housing / 8000000) * 50));
+  growth_potential_score = Math.min(100, Math.round((popFactor + housingFactor) / 2 + 20));
 
-  // Growth potential: based on city count, income, and population
-  const incomeScore = Math.min(100, Math.round((income / 100000) * 70));
-  const cityScore = Math.min(100, Math.round((cityCount / 20) * 60));
-  const growth_potential_score = Math.min(100, Math.round((incomeScore + cityScore) / 2));
-
-  // Overall score
+  // --- Overall Score: weighted average (market 40% + competition 20% + cost 20% + growth 20%) ---
   const overall_score = Math.round(
-    market_size_score * 0.3 +
+    market_size_score * 0.4 +
     competition_score * 0.2 +
     operating_cost_score * 0.2 +
-    growth_potential_score * 0.3
+    growth_potential_score * 0.2
   );
 
-  // Recommendation
-  let recommendation = "谨慎评估";
-  let go_nogo = "evaluate";
-  if (overall_score >= 65) {
+  // --- Recommendation ---
+  let recommendation: string;
+  let go_nogo: string;
+  if (overall_score >= 70) {
     recommendation = "推荐进入";
     go_nogo = "go";
-  } else if (overall_score < 40) {
+  } else if (overall_score >= 50) {
+    recommendation = "谨慎评估";
+    go_nogo = "evaluate";
+  } else {
     recommendation = "不推荐";
     go_nogo = "no-go";
   }
 
-  // Population string
-  const popStr = pop > 1000000 ? `${(pop / 1000000).toFixed(1)}M` : `${(pop / 1000).toFixed(0)}K`;
+  // Population display string
+  const popStr = pop > 1000000
+    ? `${(pop / 1000000).toFixed(1)}M`
+    : pop > 0
+      ? `${(pop / 1000).toFixed(0)}K`
+      : "--";
 
   // Revenue estimate from benchmarks
   const estimated_revenue = raw.industry_benchmarks?.annual_revenue_range ?? "";
