@@ -140,6 +140,7 @@ interface DataPoolState {
   rating_label?: string;     // 中文标签
   rating_emoji?: string;     // emoji标识
   competition_density?: number; // 竞争密度 = store_count / (population / 10000)
+  median_income?: number;       // 州收入中位数
 }
 
 /** Compute scores from raw data pool when pre-computed scores are absent */
@@ -305,21 +306,30 @@ function computeScores(raw: RawDataPool): DataPoolState {
   let store_count = 0;
   if (raw.industry_stats?.total_establishments) {
     store_count = raw.industry_stats.total_establishments;
-  } else if (raw.local_businesses && raw.local_businesses.length > 0) {
-    store_count = raw.local_businesses.length;
+  } else if (raw.local_businesses && typeof raw.local_businesses === 'object') {
+    // local_businesses is {city: [businesses]} not an array
+    for (const v of Object.values(raw.local_businesses)) {
+      if (Array.isArray(v)) store_count += v.length;
+    }
+  }
+  // Fallback: estimate from search_extracted businesses
+  if (store_count === 0 && raw.search_extracted?.businesses) {
+    const biz = raw.search_extracted.businesses;
+    store_count = Array.isArray(biz) ? biz.length : 0;
   }
 
   // --- Competition density: stores per 10,000 people ---
   const competition_density = pop > 0 ? Math.round((store_count / (pop / 10000)) * 100) / 100 : 0;
 
-  // --- Payback months ---
-  const retail_wage = 50000;
-  const monthly_labor = retail_wage * 2 / 12;
-  const monthly_rent = 2200;
+  // --- Payback months (use state-specific data when available) ---
+  const state_income = stateData?.median_income ?? 60000;
+  const rent_ratio = state_income > 80000 ? 1.5 : state_income > 60000 ? 1.2 : 1.0;
+  const monthly_labor = Math.round((state_income * 0.8) * 2 / 12); // 2 employees at 80% of median
+  const monthly_rent = Math.round(2200 * rent_ratio);
   const monthly_marketing = 1600;
   const monthly_other = 2000;
   const monthly_cost = monthly_labor + monthly_rent + monthly_marketing + monthly_other;
-  const monthly_revenue = 20000;
+  const monthly_revenue = Math.round(20000 * rent_ratio); // higher income areas = higher revenue
   const monthly_profit = monthly_revenue - monthly_cost;
   const payback_months = monthly_profit > 0 ? Math.round(150000 / monthly_profit) : 999;
 
@@ -378,6 +388,7 @@ function computeScores(raw: RawDataPool): DataPoolState {
     rating_label,
     rating_emoji,
     competition_density,
+    median_income: stateData?.median_income ?? 0,
   };
 }
 
@@ -432,11 +443,39 @@ export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const pollingRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [scrollProgress, setScrollProgress] = useState(0);
 
   // Load categories from localStorage
   useEffect(() => {
     setCatList(loadCategories());
   }, []);
+
+  // Scroll progress
+  useEffect(() => {
+    const onScroll = () => {
+      const el = document.documentElement;
+      setScrollProgress((el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100);
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Fade-in on scroll with IntersectionObserver
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      },
+      { threshold: 0.1 }
+    );
+    const els = document.querySelectorAll('.fade-in');
+    els.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  });
 
   // Initialize state map
   useEffect(() => {
@@ -913,13 +952,16 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fafafa]">
+      {/* Scroll Progress */}
+      <div className="fixed top-0 left-0 h-[3px] bg-gradient-to-r from-blue-600 to-purple-600 z-[9999] transition-all duration-100"
+        style={{ width: `${scrollProgress}%` }} />
       {/* ---- Sticky Nav ---- */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#e5e7eb]">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-                   style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                   style={{ background: "linear-gradient(135deg, #2563eb, #3b82f6)" }}>
                 M
               </div>
               <span className="font-semibold text-[#111827] text-base hidden sm:inline">MarketScope</span>
@@ -961,17 +1003,23 @@ export default function DashboardPage() {
         <>
           {/* ---- Dark Hero Header — Manus Style ---- */}
           <header className="bg-[#09090b] text-white pt-10 pb-16 px-6 relative overflow-hidden">
-            <div className="absolute top-[-200px] right-[-100px] w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle,rgba(99,102,241,0.15)_0%,transparent_70%)]" />
+            <div className="absolute top-[-200px] right-[-100px] w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle,rgba(37,99,235,0.15)_0%,transparent_70%)]" />
             <div className="max-w-[1400px] mx-auto relative z-10">
               {/* 数据源标签 */}
               <div className="flex gap-2 mb-4 flex-wrap">
-                {["Census ACS 2023", "FRED 2024", "BLS 2024", "Census CBP 2022", "Perplexity Sonar"].map(s => (
-                  <span key={s} className="text-xs px-3 py-1 rounded-full bg-white/5 border border-white/10 text-zinc-400">{s}</span>
+                {[
+                  { label: "Census ACS 2023", cls: "bg-blue-600/20 text-blue-400 border-blue-600/30" },
+                  { label: "FRED 2024", cls: "bg-green-600/20 text-green-400 border-green-600/30" },
+                  { label: "BLS 2024", cls: "bg-amber-600/20 text-amber-400 border-amber-600/30" },
+                  { label: "Census CBP 2022", cls: "bg-purple-600/20 text-purple-400 border-purple-600/30" },
+                  { label: "Perplexity Sonar", cls: "bg-cyan-600/20 text-cyan-400 border-cyan-600/30" },
+                ].map(s => (
+                  <span key={s.label} className={`text-xs font-mono px-2 py-1 rounded border ${s.cls}`}>{s.label}</span>
                 ))}
               </div>
               <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
                 美国50州<br />
-                <span className="text-[#818cf8]">{currentCategory}</span>市场调研平台
+                <span className="text-blue-400">{currentCategory}</span>市场调研平台
               </h1>
               <p className="text-zinc-400 text-lg max-w-2xl mb-6">
                 基于 Census、FRED、BLS、HUD 官方数据及AI深度搜索，为每个州生成完整的市场调研报告与投资决策建议。
@@ -989,27 +1037,31 @@ export default function DashboardPage() {
             </div>
           </header>
 
-          {/* ---- Floating Stat Cards ---- */}
-          <div className="max-w-[1400px] mx-auto px-6 -mt-8 relative z-20 grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
-              <div className="text-xs text-zinc-500 mb-1">全国总TAM</div>
-              <div className="text-2xl font-bold font-mono">${totalTAM}B</div>
-              <div className="text-xs text-zinc-400">窗帘/窗饰市场规模估算</div>
-            </div>
-            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
-              <div className="text-xs text-zinc-500 mb-1">平均竞争密度</div>
-              <div className="text-2xl font-bold font-mono text-[#6366f1]">{avgDensity}</div>
-              <div className="text-xs text-zinc-400">店/万人（已调研均值）</div>
-            </div>
-            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
-              <div className="text-xs text-zinc-500 mb-1">强烈推荐州</div>
-              <div className="text-2xl font-bold font-mono text-emerald-500">{stronglyRecommendedCount} 个</div>
-              <div className="text-xs text-zinc-400">综合评分最优</div>
-            </div>
-            <div className="bg-white rounded-xl border p-5 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all">
-              <div className="text-xs text-zinc-500 mb-1">窗帘店总数</div>
-              <div className="text-2xl font-bold font-mono">{totalStores}</div>
-              <div className="text-xs text-zinc-400">NAICS 442291 [Census CBP]</div>
+          {/* ---- Sticky Stat Bar ---- */}
+          <div className="bg-white border-b border-zinc-200 sticky top-[57px] z-40 shadow-sm">
+            <div className="max-w-[1400px] mx-auto px-6 py-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">全国总TAM</div>
+                  <div className="text-2xl font-bold font-mono text-[#2563eb]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>${totalTAM}B</div>
+                  <div className="text-xs text-zinc-400">窗帘/窗饰市场规模估算</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">平均竞争密度</div>
+                  <div className="text-2xl font-bold font-mono text-[#10b981]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{avgDensity}</div>
+                  <div className="text-xs text-zinc-400">店/万人（已调研均值）</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">强烈推荐州</div>
+                  <div className="text-2xl font-bold font-mono text-[#15803d]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{stronglyRecommendedCount} 个</div>
+                  <div className="text-xs text-zinc-400">综合评分最优</div>
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">窗帘店总数</div>
+                  <div className="text-2xl font-bold font-mono text-[#f59e0b]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{totalStores}</div>
+                  <div className="text-xs text-zinc-400">NAICS 442291 [Census CBP]</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1019,11 +1071,11 @@ export default function DashboardPage() {
             {/* Map + Scatter + Top10 — full width stacked */}
             <div className="space-y-6 mb-8">
                 {/* Map Section */}
-                <section>
+                <section className="fade-in">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-xl font-bold text-[#111827]">美国地图 — 市场评级热力图</h2>
-                      <p className="text-sm text-gray-500">点击任意州查看详细报告 · 颜色代表评级</p>
+                      <h2 className="text-xl font-bold text-zinc-900 mb-1">美国地图 — 市场评级热力图</h2>
+                      <p className="text-sm text-zinc-500 mb-4">点击任意州查看详细报告 · 颜色代表评级</p>
                     </div>
                     <div className="map-view-toggle">
                       <button
@@ -1102,13 +1154,13 @@ export default function DashboardPage() {
 
                 {/* Scatter Chart (show when 2+ states) */}
                 {researchedStates.length >= 2 && (
-                  <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <div className="fade-in bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm">
                     <ScatterChart states={researchedStates.map(s => ({
                       code: s.code,
                       name: s.name,
                       tam: s.pool?.tam ?? 0,
                       density: s.pool?.competition_density ?? 0,
-                      income: s.pool?.overall_score ?? 0,
+                      income: s.pool?.median_income ?? 0,
                       rating: s.pool?.rating ?? 'cautious',
                     }))} />
                   </div>
@@ -1116,7 +1168,7 @@ export default function DashboardPage() {
 
                 {/* Top 10 推荐州 — 5列网格（Manus风格） */}
                 {researchedStates.length > 0 && (
-                  <section>
+                  <section className="fade-in">
                     <h2 className="text-xl font-bold text-zinc-900 mb-2">Top 10 推荐州</h2>
                     <p className="text-sm text-zinc-500 mb-4">按综合评分（市场规模+消费能力+增长潜力+竞争友好+运营成本）排名</p>
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
@@ -1321,7 +1373,7 @@ export default function DashboardPage() {
                 code: s.code,
                 name: s.name,
                 tam: s.pool?.tam ?? 0,
-                income: s.pool?.overall_score ?? 0,
+                income: s.pool?.median_income ?? 0,
                 growth: s.pool?.growth_potential_score ?? 0,
                 competition: 100 - (s.pool?.competition_score ?? 50),
               }))} />
@@ -1329,17 +1381,23 @@ export default function DashboardPage() {
 
             {/* Section: Ranking Table */}
             {sortedStates.length > 0 && (
-              <section className="mb-12">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-[#111827]">州排名</h2>
+              <section className="fade-in mb-12">
+                <div className="mb-4">
+                  <h2 className="text-xl font-bold text-zinc-900 mb-1">50州综合排名表</h2>
+                  <p className="text-sm text-zinc-500 mb-4">点击列标题排序 · 点击行查看详细报告</p>
+                </div>
+                <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <input
                       type="text"
                       placeholder="搜索州名/城市..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="px-3 py-2 border rounded-lg text-sm w-48 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/30"
+                      className="px-3 py-2 border border-zinc-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/30"
                     />
+                    <span className="text-sm text-zinc-400">共 {filteredStates.length} 个州</span>
+                  </div>
+                  <div className="flex items-center gap-3">
                     {compareMode && compareSelected.length >= 2 && (
                       <button
                         onClick={openComparePanel}
@@ -1479,9 +1537,16 @@ export default function DashboardPage() {
           </main>
 
           {/* Footer */}
-          <footer className="text-center py-8 text-xs text-zinc-400">
-            <p>数据来源：US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026</p>
-            <p className="mt-1">报告更新于 2026年3月 &middot; 仅供参考，不构成投资建议</p>
+          <footer className="bg-zinc-900 text-zinc-400 py-8 mt-12">
+            <div className="max-w-[1400px] mx-auto px-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div>
+                  <div className="text-white font-bold mb-1">美国50州窗帘市场调研平台</div>
+                  <div className="text-xs leading-relaxed">数据来源：US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026</div>
+                </div>
+                <div className="text-xs text-zinc-500">报告生成时间：2026年3月 · 仅供参考，不构成投资建议</div>
+              </div>
+            </div>
           </footer>
         </>
       )}
@@ -1656,7 +1721,7 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Compare Panel Animations */}
+      {/* Compare Panel Animations + Fade-in */}
       <style dangerouslySetInnerHTML={{ __html: `
         @keyframes slideUp {
           from { transform: translateY(100%); }
@@ -1666,6 +1731,8 @@ export default function DashboardPage() {
           from { opacity: 0; }
           to { opacity: 1; }
         }
+        .fade-in { opacity: 0; transform: translateY(28px); transition: opacity 0.6s ease, transform 0.6s ease; }
+        .fade-in.visible { opacity: 1; transform: translateY(0); }
       ` }} />
     </div>
   );
@@ -1743,11 +1810,19 @@ function getStateFillColor(info: StateInfo | undefined): string {
   if (!info) return "#e5e7eb";
   if (info.generating) return "#c7d2fe";
   if (!info.report) return "#e5e7eb";
-  const rec = info.pool?.recommendation ?? info.pool?.go_nogo ?? "";
-  if (rec.includes("推荐") || rec.toLowerCase() === "go") return "#10b981";
-  if (rec.includes("谨慎") || rec.includes("观望")) return "#f59e0b";
-  if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) return "#ef4444";
-  return "#6366f1";
+  // Use 4-level rating system
+  const rating = info.pool?.rating ?? "";
+  if (rating === "strongly_recommended") return "#16a34a"; // 深绿
+  if (rating === "recommended") return "#4ade80";          // 浅绿
+  if (rating === "cautious") return "#f97316";             // 橙
+  if (rating === "not_recommended") return "#dc2626";      // 红
+  // Fallback to old logic
+  const rec = info.pool?.recommendation ?? info.pool?.rating_label ?? "";
+  if (rec === "强烈推荐") return "#16a34a";
+  if (rec === "推荐") return "#4ade80";
+  if (rec === "谨慎") return "#f97316";
+  if (rec === "不推荐") return "#dc2626";
+  return "#10b981";
 }
 
 function getRecommendationLabel(info: StateInfo): string {
