@@ -1165,8 +1165,8 @@ export default function DashboardPage() {
                 )}
             </div>
 
-            {/* 50-State Grid */}
-            <section className="mb-12">
+            {/* 50-State Grid — hidden, use map instead */}
+            <section className="mb-12" style={{ display: 'none' }}>
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="text-xl font-bold text-[#111827]">美国50州调研总览</h2>
