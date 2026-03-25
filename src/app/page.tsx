@@ -1043,16 +1043,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="card p-6">
                     {mapView === "svg" ? (
-                      <USMap
-                        states={Object.fromEntries(Object.entries(states).map(([code, s]) => [code, {
-                          score: s.pool?.overall_score,
-                          recommendation: s.pool?.rating_label,
-                          population: s.pool?.tam ? `TAM $${s.pool.tam.toFixed(2)}B` : undefined,
-                          income: s.pool?.recommended_city,
-                          status: (s.generating ? 'generating' : s.report ? 'researched' : 'none') as 'generating' | 'researched' | 'none',
-                        }]))}
-                        onStateClick={handleStateClick}
-                      />
+                      <SvgMapView states={states} onCardClick={handleCardClick} />
                     ) : (
                       <>
                         <div className="us-tile-map">
