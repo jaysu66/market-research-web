@@ -689,31 +689,24 @@ function ReportCard({ report }: { report: Report }) {
   const isGo = goNoGo === "go";
 
   // Build download links from files object
+  // API returns keys like "report.html", "report_a.docx", "report_b.docx"
   const downloads: { label: string; url: string }[] = [];
   if (r.files) {
-    if (r.files.html) {
-      downloads.push({
-        label: "HTML 报告",
-        url: r.files.html.startsWith("http")
-          ? r.files.html
-          : supabasePublicUrl(r.files.html),
-      });
-    }
-    if (r.files.data_docx) {
-      downloads.push({
-        label: "数据报告",
-        url: r.files.data_docx.startsWith("http")
-          ? r.files.data_docx
-          : supabasePublicUrl(r.files.data_docx),
-      });
-    }
-    if (r.files.business_docx) {
-      downloads.push({
-        label: "商业分析",
-        url: r.files.business_docx.startsWith("http")
-          ? r.files.business_docx
-          : supabasePublicUrl(r.files.business_docx),
-      });
+    const f = r.files as Record<string, string>;
+    const mapping: [string[], string][] = [
+      [["report.html", "html"], "HTML 报告"],
+      [["report_a.docx", "data_docx"], "数据报告"],
+      [["report_b.docx", "business_docx"], "商业分析"],
+      [["data_pool.json"], "数据池"],
+    ];
+    for (const [keys, label] of mapping) {
+      const url = keys.map(k => f[k]).find(v => v);
+      if (url) {
+        downloads.push({
+          label,
+          url: url.startsWith("http") ? url : supabasePublicUrl(url),
+        });
+      }
     }
   }
 
