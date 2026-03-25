@@ -559,7 +559,6 @@ export default function DashboardPage() {
   const toggleCompareSelect = (code: string) => {
     setCompareSelected((prev) => {
       if (prev.includes(code)) return prev.filter((c) => c !== code);
-      if (prev.length >= 3) return prev; // max 3
       return [...prev, code];
     });
   };
@@ -1132,12 +1131,33 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 {compareMode && (
-                  <div className="mb-4 p-3 rounded-xl bg-[#f5f3ff] border border-[#e0e7ff] text-sm text-[#6366f1] flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="8" cy="8" r="6" />
-                      <path d="M8 5v3M8 10.5v.5" strokeLinecap="round" />
-                    </svg>
-                    请勾选 2-3 个州进行对比（已选 {compareSelected.length}/3）
+                  <div className="mb-4 p-3 rounded-xl bg-[#f5f3ff] border border-[#e0e7ff] text-sm text-[#6366f1] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="8" cy="8" r="6" />
+                        <path d="M8 5v3M8 10.5v.5" strokeLinecap="round" />
+                      </svg>
+                      勾选要对比的州（已选 {compareSelected.length}）
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const researched = sortedStates.filter((s) => s.report).map((s) => s.code);
+                          setCompareSelected(researched);
+                        }}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-[#6366f1] text-white hover:bg-[#4f46e5] transition-colors"
+                      >
+                        全选已调研
+                      </button>
+                      {compareSelected.length > 0 && (
+                        <button
+                          onClick={() => setCompareSelected([])}
+                          className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#e0e7ff] text-[#6366f1] hover:bg-[#f5f3ff] transition-colors"
+                        >
+                          清空
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div className="card overflow-hidden">
@@ -1180,7 +1200,7 @@ export default function DashboardPage() {
                                     type="checkbox"
                                     checked={compareSelected.includes(s.code)}
                                     onChange={() => toggleCompareSelect(s.code)}
-                                    disabled={!compareSelected.includes(s.code) && compareSelected.length >= 3}
+                                    disabled={false}
                                     className="w-4 h-4 rounded border-[#d1d5db] text-[#6366f1] focus:ring-[#6366f1] cursor-pointer accent-[#6366f1]"
                                   />
                                 </td>
