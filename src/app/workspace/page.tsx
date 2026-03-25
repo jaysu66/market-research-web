@@ -28,8 +28,6 @@ const TOP10 = ["CA", "TX", "NY", "FL", "IL", "PA", "OH", "GA", "NC", "MI"];
 
 const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
-  { key: "blinds", label: "百叶窗" },
-  { key: "shutters", label: "卷帘" },
 ];
 
 function loadCategories(): { key: string; label: string }[] {
