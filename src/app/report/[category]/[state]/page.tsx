@@ -68,7 +68,29 @@ export default async function ReportPage({
     const indexUrl = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${category}/index.json`;
     const res = await fetch(indexUrl, { next: { revalidate: 30 } });
     if (res.ok) {
-      const reports: ReportData[] = await res.json();
+      const raw = await res.json();
+      // Support both old flat format and new versioned format
+      let reports: ReportData[] = [];
+      if (Array.isArray(raw)) {
+        for (const entry of raw) {
+          if (entry.versions && Array.isArray(entry.versions)) {
+            // New versioned format — extract latest version
+            const latest = entry.versions.find((v: Record<string, unknown>) => v.is_latest) || entry.versions[0];
+            if (latest) {
+              reports.push({
+                state_code: entry.state_code,
+                state_name: entry.state_name,
+                product: category,
+                created_at: latest.created_at || latest.timestamp || "",
+                files: latest.files || {},
+              });
+            }
+          } else {
+            // Old flat format
+            reports.push(entry);
+          }
+        }
+      }
       const matches = reports.filter((r) => r.state_code.toUpperCase() === stateCode);
       report = matches.length > 0 ? matches[matches.length - 1] : null;
     }
