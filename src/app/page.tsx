@@ -764,7 +764,7 @@ function ReportCard({ report }: { report: Report }) {
             const htmlUrl = downloads.find(d => d.label === "HTML 报告")?.url;
             return htmlUrl ? (
               <a
-                href={htmlUrl}
+                href={`/preview?url=${encodeURIComponent(htmlUrl)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 text-[11px] font-bold rounded-md
