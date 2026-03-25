@@ -1346,7 +1346,7 @@ export default function DashboardPage() {
                 <div className="confirm-popup-overlay" onClick={() => setConfirmState(null)} />
                 <div
                   className="confirm-popup"
-                  style={{ left: confirmPos.x, top: confirmPos.y }}
+                  style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', position: 'fixed', zIndex: 9999 }}
                 >
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-base font-bold">{confirmState}</span>
