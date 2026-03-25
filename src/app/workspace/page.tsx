@@ -48,15 +48,114 @@ function saveCategories(cats: { key: string; label: string }[]) {
 const COST_PER_STATE = 0.35;
 const MINS_PER_STATE = 2.5;
 
+// Task timeout: 30 minutes in milliseconds
+const TASK_TIMEOUT_MS = 30 * 60 * 1000;
+// Max consecutive 404s before auto-cleaning a task
+const MAX_404_COUNT = 3;
+
+// Data sources that appear during report generation
+const DATA_SOURCES = [
+  { key: "census", label: "Census" },
+  { key: "fred", label: "FRED" },
+  { key: "bls", label: "BLS" },
+  { key: "google_trends", label: "Trends" },
+  { key: "ai", label: "AI" },
+];
+
+// Map stage number to which data sources are relevant
+function getSourceStatusFromStep(step: string, progress: number): Record<string, "done" | "active" | "pending"> {
+  const result: Record<string, "done" | "active" | "pending"> = {};
+  DATA_SOURCES.forEach((s) => (result[s.key] = "pending"));
+
+  // Parse stage from step text like "Stage 2/5: ..."
+  const stageMatch = step.match(/Stage\s+(\d+)\/(\d+)/i);
+  const stageNum = stageMatch ? parseInt(stageMatch[1], 10) : 0;
+
+  if (stageNum >= 1) {
+    // Stage 1: collecting API data (Census, FRED, BLS)
+    if (stageNum === 1) {
+      result["census"] = "active";
+      result["fred"] = "active";
+      result["bls"] = "active";
+    } else {
+      result["census"] = "done";
+      result["fred"] = "done";
+      result["bls"] = "done";
+    }
+  }
+  if (stageNum >= 2) {
+    // Stage 2: Google Trends
+    if (stageNum === 2) {
+      result["google_trends"] = "active";
+    } else {
+      result["google_trends"] = "done";
+    }
+  }
+  if (stageNum >= 3) {
+    // Stage 3: analyzing data (no new source)
+  }
+  if (stageNum >= 4) {
+    // Stage 4: AI generation
+    if (stageNum === 4) {
+      result["ai"] = "active";
+    } else {
+      result["ai"] = "done";
+    }
+  }
+  if (stageNum >= 5) {
+    // Stage 5: exporting / finalizing
+    result["ai"] = "done";
+  }
+
+  // If completed (progress === 100), mark all done
+  if (progress >= 100) {
+    DATA_SOURCES.forEach((s) => (result[s.key] = "done"));
+  }
+
+  return result;
+}
+
+// Format elapsed time as "Xm Ys"
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  if (mins === 0) return `${secs}s`;
+  return `${mins}m ${secs.toString().padStart(2, "0")}s`;
+}
+
+// Parse the 5-stage pipeline into a checklist
+function parseStages(currentStep: string, progress: number): { label: string; status: "done" | "active" | "pending" }[] {
+  const stages = [
+    { label: "采集 API 数据", stageNum: 1 },
+    { label: "采集搜索趋势", stageNum: 2 },
+    { label: "数据分析处理", stageNum: 3 },
+    { label: "AI 生成报告", stageNum: 4 },
+    { label: "导出报告文件", stageNum: 5 },
+  ];
+
+  const stageMatch = currentStep.match(/Stage\s+(\d+)\/(\d+)/i);
+  const currentStage = stageMatch ? parseInt(stageMatch[1], 10) : 0;
+
+  return stages.map((s) => {
+    if (progress >= 100) return { ...s, status: "done" as const };
+    if (s.stageNum < currentStage) return { ...s, status: "done" as const };
+    if (s.stageNum === currentStage) return { ...s, status: "active" as const };
+    return { ...s, status: "pending" as const };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 interface QueueTask {
   stateCode: string;
   taskId: string;
-  status: "pending" | "running" | "completed" | "error";
+  status: "pending" | "running" | "completed" | "error" | "expired" | "timeout";
   progress: number;
   step: string;
+  startedAt: number;        // timestamp when task started
+  notFoundCount: number;    // consecutive 404 count
 }
 
 interface CategoryInfo {
@@ -78,11 +177,21 @@ export default function WorkspacePage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCatLabel, setNewCatLabel] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Load saved categories on mount
   useEffect(() => {
     setCatList(loadCategories());
+  }, []);
+
+  // Tick every second for elapsed time display
+  useEffect(() => {
+    timerRef.current = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
   // Add new category
@@ -153,6 +262,7 @@ export default function WorkspacePage() {
 
     const codes = Array.from(selected);
     const newQueue: QueueTask[] = [];
+    const startTime = Date.now();
 
     for (const code of codes) {
       try {
@@ -169,6 +279,8 @@ export default function WorkspacePage() {
             status: "running",
             progress: 0,
             step: "collecting",
+            startedAt: startTime,
+            notFoundCount: 0,
           });
         } else {
           newQueue.push({
@@ -177,6 +289,8 @@ export default function WorkspacePage() {
             status: "error",
             progress: 0,
             step: "",
+            startedAt: startTime,
+            notFoundCount: 0,
           });
         }
       } catch {
@@ -186,6 +300,8 @@ export default function WorkspacePage() {
           status: "error",
           progress: 0,
           step: "",
+          startedAt: startTime,
+          notFoundCount: 0,
         });
       }
     }
@@ -194,14 +310,18 @@ export default function WorkspacePage() {
     setSelected(new Set());
   };
 
+  // Check if a task is in a terminal state
+  const isTerminal = (status: string) =>
+    status === "completed" || status === "error" || status === "expired" || status === "timeout";
+
   // Poll queue
   useEffect(() => {
-    if (queue.length === 0 || queue.every((t) => t.status === "completed" || t.status === "error")) {
+    if (queue.length === 0 || queue.every((t) => isTerminal(t.status))) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-      if (queue.length > 0 && queue.every((t) => t.status === "completed" || t.status === "error")) {
+      if (queue.length > 0 && queue.every((t) => isTerminal(t.status))) {
         setIsBatchRunning(false);
         fetchCategories();
       }
@@ -213,11 +333,43 @@ export default function WorkspacePage() {
         const running = prev.filter((t) => t.status === "running" && t.taskId);
         if (running.length === 0) return prev;
 
-        // Fire off async status checks and update state when they resolve
-        // (we return prev unchanged here; updates happen via separate setQueue calls)
         for (const t of running) {
+          // Check for timeout (30 minutes)
+          if (Date.now() - t.startedAt > TASK_TIMEOUT_MS) {
+            setQueue((cur) =>
+              cur.map((item) =>
+                item.stateCode === t.stateCode
+                  ? { ...item, status: "timeout" as const, step: "任务超时（超过30分钟）" }
+                  : item
+              )
+            );
+            continue;
+          }
+
           fetch(`${API}/status/${t.taskId}`)
-            .then((res) => (res.ok ? res.json() : null))
+            .then((res) => {
+              if (res.status === 404) {
+                // Handle 404: increment counter, expire if threshold reached
+                setQueue((cur) =>
+                  cur.map((item) => {
+                    if (item.stateCode !== t.stateCode) return item;
+                    const newCount = item.notFoundCount + 1;
+                    if (newCount >= MAX_404_COUNT) {
+                      return {
+                        ...item,
+                        status: "expired" as const,
+                        step: "任务已失效（服务端无此任务）",
+                        notFoundCount: newCount,
+                      };
+                    }
+                    return { ...item, notFoundCount: newCount };
+                  })
+                );
+                return null;
+              }
+              if (!res.ok) return null;
+              return res.json();
+            })
             .then((data) => {
               if (!data) return;
               setQueue((cur) =>
@@ -228,12 +380,13 @@ export default function WorkspacePage() {
                         progress: data.progress ?? 0,
                         step: data.step ?? "",
                         status: data.status === "completed" ? "completed" : data.status === "error" ? "error" : "running",
+                        notFoundCount: 0, // reset on successful response
                       }
                     : item
                 )
               );
             })
-            .catch(() => { /* ignore */ });
+            .catch(() => { /* ignore network errors */ });
         }
         return prev;
       });
@@ -382,72 +535,178 @@ export default function WorkspacePage() {
             </div>
 
             <div className="space-y-3">
-              {queue.map((task) => (
-                <div
-                  key={task.stateCode}
-                  className={`flex items-center gap-4 p-3 rounded-lg border ${
-                    task.status === "completed"
-                      ? "bg-[#ecfdf5] border-[#d1fae5]"
-                      : task.status === "error"
-                      ? "bg-[#fef2f2] border-[#fee2e2]"
-                      : "bg-white border-[#e5e7eb]"
-                  }`}
-                >
-                  {/* Status icon */}
-                  <div className="flex-shrink-0">
-                    {task.status === "completed" ? (
-                      <div className="w-6 h-6 rounded-full bg-[#10b981] flex items-center justify-center">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
-                          <path d="M2 6l3 3 5-5" />
-                        </svg>
-                      </div>
-                    ) : task.status === "error" ? (
-                      <div className="w-6 h-6 rounded-full bg-[#ef4444] flex items-center justify-center">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
-                          <path d="M3 3l6 6M9 3l-6 6" />
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className="w-6 h-6 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
-                    )}
-                  </div>
+              {queue.map((task) => {
+                const elapsed = now - task.startedAt;
+                const sourceStatus = getSourceStatusFromStep(task.step, task.progress);
+                const stages = parseStages(task.step, task.progress);
 
-                  {/* State info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-sm text-[#111827]">{task.stateCode}</span>
-                      <span className="text-xs text-[#6b7280]">{US_STATES[task.stateCode]}</span>
-                    </div>
-                    {task.status === "running" && task.step && (
-                      <p className="text-xs text-[#9ca3af] mt-0.5">{task.step}</p>
-                    )}
-                  </div>
+                return (
+                  <div
+                    key={task.stateCode}
+                    className={`p-4 rounded-lg border ${
+                      task.status === "completed"
+                        ? "bg-[#ecfdf5] border-[#d1fae5]"
+                        : task.status === "error"
+                        ? "bg-[#fef2f2] border-[#fee2e2]"
+                        : task.status === "expired"
+                        ? "bg-[#fffbeb] border-[#fde68a]"
+                        : task.status === "timeout"
+                        ? "bg-[#fffbeb] border-[#fde68a]"
+                        : "bg-white border-[#e5e7eb]"
+                    }`}
+                  >
+                    {/* Top row: status icon, state info, progress */}
+                    <div className="flex items-center gap-4">
+                      {/* Status icon */}
+                      <div className="flex-shrink-0">
+                        {task.status === "completed" ? (
+                          <div className="w-6 h-6 rounded-full bg-[#10b981] flex items-center justify-center">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
+                              <path d="M2 6l3 3 5-5" />
+                            </svg>
+                          </div>
+                        ) : task.status === "error" ? (
+                          <div className="w-6 h-6 rounded-full bg-[#ef4444] flex items-center justify-center">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
+                              <path d="M3 3l6 6M9 3l-6 6" />
+                            </svg>
+                          </div>
+                        ) : task.status === "expired" || task.status === "timeout" ? (
+                          <div className="w-6 h-6 rounded-full bg-[#f59e0b] flex items-center justify-center">
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="white" strokeWidth="2">
+                              <path d="M6 3v4M6 9h.01" />
+                            </svg>
+                          </div>
+                        ) : (
+                          <div className="w-6 h-6 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                        )}
+                      </div>
 
-                  {/* Progress */}
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {task.status === "running" && (
-                      <>
-                        <div className="w-24 progress-bar">
-                          <div
-                            className="progress-bar-fill"
-                            style={{
-                              width: `${task.progress}%`,
-                              background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
-                            }}
-                          />
+                      {/* State info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm text-[#111827]">{task.stateCode}</span>
+                          <span className="text-xs text-[#6b7280]">{US_STATES[task.stateCode]}</span>
+                          {task.status === "running" && (
+                            <span className="text-xs text-[#9ca3af] ml-auto mr-2">
+                              {formatElapsed(elapsed)}
+                            </span>
+                          )}
                         </div>
-                        <span className="text-xs text-[#6b7280] w-8 text-right">{task.progress}%</span>
-                      </>
-                    )}
-                    {task.status === "completed" && (
-                      <span className="text-xs text-[#10b981] font-medium">完成</span>
-                    )}
-                    {task.status === "error" && (
-                      <span className="text-xs text-[#ef4444] font-medium">失败</span>
+                        {task.status === "running" && task.step && (
+                          <p className="text-xs text-[#6366f1] mt-0.5 font-medium">{task.step}</p>
+                        )}
+                        {task.status === "expired" && (
+                          <p className="text-xs text-[#f59e0b] mt-0.5">{task.step || "任务已失效"}</p>
+                        )}
+                        {task.status === "timeout" && (
+                          <p className="text-xs text-[#f59e0b] mt-0.5">{task.step || "任务超时"}</p>
+                        )}
+                      </div>
+
+                      {/* Progress */}
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {task.status === "running" && (
+                          <>
+                            <div className="w-24 progress-bar">
+                              <div
+                                className="progress-bar-fill"
+                                style={{
+                                  width: `${task.progress}%`,
+                                  background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs text-[#6b7280] w-8 text-right">{task.progress}%</span>
+                          </>
+                        )}
+                        {task.status === "completed" && (
+                          <span className="text-xs text-[#10b981] font-medium">完成</span>
+                        )}
+                        {task.status === "error" && (
+                          <span className="text-xs text-[#ef4444] font-medium">失败</span>
+                        )}
+                        {task.status === "expired" && (
+                          <span className="text-xs text-[#f59e0b] font-medium">已失效</span>
+                        )}
+                        {task.status === "timeout" && (
+                          <span className="text-xs text-[#f59e0b] font-medium">超时</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Expanded detail: data sources + stage checklist (only for running tasks) */}
+                    {task.status === "running" && (
+                      <div className="mt-3 pt-3 border-t border-[#e5e7eb]/60">
+                        {/* Data source icons */}
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-[10px] text-[#9ca3af] uppercase tracking-wider">数据源</span>
+                          <div className="flex items-center gap-2">
+                            {DATA_SOURCES.map((src) => {
+                              const st = sourceStatus[src.key];
+                              return (
+                                <span
+                                  key={src.key}
+                                  className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full border ${
+                                    st === "done"
+                                      ? "bg-[#ecfdf5] border-[#d1fae5] text-[#10b981]"
+                                      : st === "active"
+                                      ? "bg-[#eef2ff] border-[#c7d2fe] text-[#6366f1]"
+                                      : "bg-[#f9fafb] border-[#e5e7eb] text-[#d1d5db]"
+                                  }`}
+                                >
+                                  {st === "done" ? (
+                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M1.5 5l2.5 2.5 4.5-4.5" />
+                                    </svg>
+                                  ) : st === "active" ? (
+                                    <div className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                                  ) : (
+                                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                      <circle cx="5" cy="5" r="3.5" />
+                                    </svg>
+                                  )}
+                                  {src.label}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Stage checklist */}
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-[10px] text-[#9ca3af] uppercase tracking-wider">阶段</span>
+                          {stages.map((s, i) => (
+                            <span
+                              key={i}
+                              className={`inline-flex items-center gap-1 text-[11px] ${
+                                s.status === "done"
+                                  ? "text-[#10b981]"
+                                  : s.status === "active"
+                                  ? "text-[#6366f1] font-medium"
+                                  : "text-[#d1d5db]"
+                              }`}
+                            >
+                              {s.status === "done" ? (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M1.5 5l2.5 2.5 4.5-4.5" />
+                                </svg>
+                              ) : s.status === "active" ? (
+                                <div className="w-2.5 h-2.5 border border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                  <circle cx="5" cy="5" r="3.5" />
+                                </svg>
+                              )}
+                              {s.label}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

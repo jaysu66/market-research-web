@@ -297,6 +297,11 @@ export default function DashboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("overall");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [mapView, setMapView] = useState<"tile" | "svg">("tile");
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelected, setCompareSelected] = useState<string[]>([]);
+  const [showComparePanel, setShowComparePanel] = useState(false);
+  const radarChartRef = useRef<HTMLDivElement>(null);
+  const echartsLoadedRef = useRef(false);
   const pollingRef = useRef<Set<string>>(new Set());
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -548,6 +553,187 @@ export default function DashboardPage() {
       setSortKey(key);
       setSortDir("desc");
     }
+  };
+
+  // Compare mode handlers
+  const toggleCompareSelect = (code: string) => {
+    setCompareSelected((prev) => {
+      if (prev.includes(code)) return prev.filter((c) => c !== code);
+      if (prev.length >= 3) return prev; // max 3
+      return [...prev, code];
+    });
+  };
+
+  const openComparePanel = () => {
+    setShowComparePanel(true);
+    // Load ECharts if not loaded
+    if (!echartsLoadedRef.current && typeof window !== "undefined") {
+      const existing = document.querySelector('script[src*="echarts"]');
+      if (!existing) {
+        const script = document.createElement("script");
+        script.src = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js";
+        script.onload = () => {
+          echartsLoadedRef.current = true;
+          renderRadarChart();
+        };
+        document.head.appendChild(script);
+      } else {
+        echartsLoadedRef.current = true;
+        setTimeout(renderRadarChart, 100);
+      }
+    } else {
+      setTimeout(renderRadarChart, 100);
+    }
+  };
+
+  const closeComparePanel = () => {
+    setShowComparePanel(false);
+  };
+
+  const exitCompareMode = () => {
+    setCompareMode(false);
+    setCompareSelected([]);
+    setShowComparePanel(false);
+  };
+
+  const renderRadarChart = () => {
+    if (!radarChartRef.current) return;
+    const echarts = (window as unknown as Record<string, unknown>).echarts as {
+      init: (el: HTMLElement) => {
+        setOption: (opt: unknown) => void;
+        resize: () => void;
+        dispose: () => void;
+      };
+      getInstanceByDom: (el: HTMLElement) => unknown;
+    };
+    if (!echarts) return;
+
+    // Dispose existing instance
+    const existingInstance = echarts.getInstanceByDom(radarChartRef.current);
+    if (existingInstance) {
+      (existingInstance as { dispose: () => void }).dispose();
+    }
+
+    const chart = echarts.init(radarChartRef.current);
+    const colors = ["#6366f1", "#10b981", "#f59e0b"];
+    const selectedStates = compareSelected.map((code) => states[code]).filter(Boolean);
+
+    const option = {
+      color: colors,
+      legend: {
+        data: selectedStates.map((s) => `${s.code} ${s.name}`),
+        bottom: 0,
+        textStyle: { color: "#6b7280", fontSize: 12 },
+      },
+      radar: {
+        indicator: [
+          { name: "市场规模", max: 100 },
+          { name: "竞争强度", max: 100 },
+          { name: "运营成本", max: 100 },
+          { name: "增长潜力", max: 100 },
+          { name: "综合评分", max: 100 },
+        ],
+        shape: "circle",
+        splitNumber: 4,
+        axisName: { color: "#374151", fontSize: 12 },
+        splitLine: { lineStyle: { color: "#e5e7eb" } },
+        splitArea: { areaStyle: { color: ["rgba(99,102,241,0.02)", "rgba(99,102,241,0.05)"] } },
+        axisLine: { lineStyle: { color: "#e5e7eb" } },
+      },
+      series: [
+        {
+          type: "radar",
+          data: selectedStates.map((s, i) => ({
+            value: [
+              s.pool?.market_size_score ?? 0,
+              s.pool?.competition_score ?? 0,
+              s.pool?.operating_cost_score ?? 0,
+              s.pool?.growth_potential_score ?? 0,
+              s.pool?.overall_score ?? 0,
+            ],
+            name: `${s.code} ${s.name}`,
+            lineStyle: { width: 2, color: colors[i] },
+            areaStyle: { color: colors[i], opacity: 0.1 },
+            itemStyle: { color: colors[i] },
+          })),
+        },
+      ],
+    };
+
+    chart.setOption(option);
+    // Handle resize
+    const handleResize = () => chart.resize();
+    window.addEventListener("resize", handleResize);
+    // Cleanup on next render
+    setTimeout(() => {
+      window.removeEventListener("resize", handleResize);
+    }, 60000);
+  };
+
+  // Re-render radar chart when panel opens or selection changes
+  useEffect(() => {
+    if (showComparePanel && echartsLoadedRef.current && compareSelected.length >= 2) {
+      setTimeout(renderRadarChart, 150);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showComparePanel, compareSelected]);
+
+  // Generate AI comparison summary
+  const generateComparisonSummary = (): string => {
+    const selected = compareSelected.map((code) => states[code]).filter(Boolean);
+    if (selected.length < 2) return "";
+
+    const best = selected.reduce((a, b) =>
+      (a.pool?.overall_score ?? 0) >= (b.pool?.overall_score ?? 0) ? a : b
+    );
+    const worst = selected.reduce((a, b) =>
+      (a.pool?.overall_score ?? 0) <= (b.pool?.overall_score ?? 0) ? a : b
+    );
+
+    const bestMarket = selected.reduce((a, b) =>
+      (a.pool?.market_size_score ?? 0) >= (b.pool?.market_size_score ?? 0) ? a : b
+    );
+    const bestCost = selected.reduce((a, b) =>
+      (a.pool?.operating_cost_score ?? 0) >= (b.pool?.operating_cost_score ?? 0) ? a : b
+    );
+    const bestGrowth = selected.reduce((a, b) =>
+      (a.pool?.growth_potential_score ?? 0) >= (b.pool?.growth_potential_score ?? 0) ? a : b
+    );
+    const bestComp = selected.reduce((a, b) =>
+      (a.pool?.competition_score ?? 0) >= (b.pool?.competition_score ?? 0) ? a : b
+    );
+
+    const names = selected.map((s) => s.name).join("、");
+    const scoreDiff = (best.pool?.overall_score ?? 0) - (worst.pool?.overall_score ?? 0);
+
+    let summary = `综合对比 ${names}：`;
+    summary += `${best.name} 综合评分最高（${best.pool?.overall_score ?? 0}分），`;
+    if (scoreDiff <= 5) {
+      summary += `各州评分接近，差距仅 ${scoreDiff} 分。`;
+    } else {
+      summary += `领先 ${worst.name}（${worst.pool?.overall_score ?? 0}分）${scoreDiff} 分。`;
+    }
+
+    const advantages: string[] = [];
+    if (bestMarket.code === best.code) advantages.push("市场规模");
+    if (bestCost.code === best.code) advantages.push("运营成本");
+    if (bestGrowth.code === best.code) advantages.push("增长潜力");
+    if (bestComp.code === best.code) advantages.push("竞争环境");
+
+    if (advantages.length > 0) {
+      summary += ` ${best.name} 在${advantages.join("、")}方面具有优势。`;
+    }
+
+    if (bestCost.code !== best.code) {
+      summary += ` 若注重成本控制，${bestCost.name} 的运营成本评分更优（${bestCost.pool?.operating_cost_score ?? 0}分）。`;
+    }
+
+    const bestRec = best.pool?.recommendation ?? best.pool?.go_nogo ?? "";
+    if (bestRec.includes("推荐") || bestRec.toLowerCase() === "go") {
+      summary += ` 建议优先考虑 ${best.name}。`;
+    }
+
+    return summary;
   };
 
   // Stats
@@ -914,12 +1100,52 @@ export default function DashboardPage() {
             {/* Section: Ranking Table */}
             {sortedStates.length > 0 && (
               <section className="mb-12">
-                <h2 className="text-xl font-bold text-[#111827] mb-6">州排名</h2>
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-[#111827]">州排名</h2>
+                  <div className="flex items-center gap-3">
+                    {compareMode && compareSelected.length >= 2 && (
+                      <button
+                        onClick={openComparePanel}
+                        className="btn-primary text-sm flex items-center gap-1.5"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M4 12V6M8 12V4M12 12V8" />
+                        </svg>
+                        对比 {compareSelected.length} 个州
+                      </button>
+                    )}
+                    {compareMode ? (
+                      <button onClick={exitCompareMode} className="btn-ghost text-sm">
+                        退出对比
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setCompareMode(true)}
+                        className="btn-secondary text-sm flex items-center gap-1.5"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                          <path d="M4 12V6M8 12V4M12 12V8" />
+                        </svg>
+                        对比模式
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {compareMode && (
+                  <div className="mb-4 p-3 rounded-xl bg-[#f5f3ff] border border-[#e0e7ff] text-sm text-[#6366f1] flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="8" cy="8" r="6" />
+                      <path d="M8 5v3M8 10.5v.5" strokeLinecap="round" />
+                    </svg>
+                    请勾选 2-3 个州进行对比（已选 {compareSelected.length}/3）
+                  </div>
+                )}
                 <div className="card overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="data-table">
                       <thead>
                         <tr className="bg-[#f9fafb]">
+                          {compareMode && <th className="w-12"></th>}
                           <th className="w-16">#</th>
                           <SortHeader label="州" sortKey="state" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="综合评分" sortKey="overall" current={sortKey} dir={sortDir} onClick={toggleSort} />
@@ -939,9 +1165,26 @@ export default function DashboardPage() {
                           return (
                             <tr
                               key={s.code}
-                              className="cursor-pointer"
-                              onClick={() => window.open(`/report/${category}/${s.code}`, "_blank")}
+                              className={`cursor-pointer ${compareMode && compareSelected.includes(s.code) ? "bg-[#f5f3ff]" : ""}`}
+                              onClick={() => {
+                                if (compareMode) {
+                                  toggleCompareSelect(s.code);
+                                } else {
+                                  window.open(`/report/${category}/${s.code}`, "_blank");
+                                }
+                              }}
                             >
+                              {compareMode && (
+                                <td className="text-center" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={compareSelected.includes(s.code)}
+                                    onChange={() => toggleCompareSelect(s.code)}
+                                    disabled={!compareSelected.includes(s.code) && compareSelected.length >= 3}
+                                    className="w-4 h-4 rounded border-[#d1d5db] text-[#6366f1] focus:ring-[#6366f1] cursor-pointer accent-[#6366f1]"
+                                  />
+                                </td>
+                              )}
                               <td className="text-[#9ca3af] font-medium">{i + 1}</td>
                               <td>
                                 <div className="flex items-center gap-2">
@@ -982,6 +1225,188 @@ export default function DashboardPage() {
           </>
         )}
       </main>
+
+      {/* ---- Compare Panel (Slide Up) ---- */}
+      {showComparePanel && compareSelected.length >= 2 && (
+        <>
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/30 z-[60] transition-opacity"
+            onClick={closeComparePanel}
+            style={{ animation: "fadeIn 0.3s ease" }}
+          />
+          {/* Panel */}
+          <div
+            className="fixed bottom-0 left-0 right-0 z-[70] max-h-[85vh] overflow-y-auto"
+            style={{
+              background: "rgba(255,255,255,0.85)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              borderTop: "1px solid rgba(99,102,241,0.2)",
+              borderRadius: "24px 24px 0 0",
+              boxShadow: "0 -8px 40px rgba(0,0,0,0.12)",
+              animation: "slideUp 0.4s cubic-bezier(0.16,1,0.3,1)",
+            }}
+          >
+            {/* Panel Header */}
+            <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-[#e5e7eb]/60"
+              style={{ background: "rgba(255,255,255,0.9)", backdropFilter: "blur(10px)", borderRadius: "24px 24px 0 0" }}>
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
+                  style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M4 12V6M8 12V4M12 12V8" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-[#111827]">跨州对比分析</h3>
+                  <p className="text-xs text-[#6b7280]">
+                    {compareSelected.map((c) => `${states[c]?.name ?? c}`).join(" vs ")}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeComparePanel}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#f3f4f6] transition-colors text-[#6b7280] hover:text-[#111827]"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6 6l8 8M14 6l-8 8" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="max-w-6xl mx-auto px-6 py-6">
+              {/* Radar Chart + Key Metrics side by side */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                {/* Radar Chart */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-[#e5e7eb]/50">
+                  <h4 className="text-sm font-semibold text-[#111827] mb-3 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#6366f1]"></span>
+                    五维雷达图
+                  </h4>
+                  <div ref={radarChartRef} style={{ width: "100%", height: 320 }} />
+                </div>
+
+                {/* Key Metrics Table */}
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-[#e5e7eb]/50">
+                  <h4 className="text-sm font-semibold text-[#111827] mb-3 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
+                    关键指标对比
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-[#e5e7eb]">
+                          <th className="text-left py-2.5 px-3 text-[#6b7280] font-medium text-xs">指标</th>
+                          {compareSelected.map((code) => (
+                            <th key={code} className="text-center py-2.5 px-3 font-semibold text-[#111827] text-xs">
+                              <span className="inline-flex items-center gap-1">
+                                {code}
+                                <span className="text-[#9ca3af] font-normal">{states[code]?.name}</span>
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { label: "综合评分", key: "overall_score" as const, unit: "分" },
+                          { label: "市场规模", key: "market_size_score" as const, unit: "分" },
+                          { label: "竞争强度", key: "competition_score" as const, unit: "分" },
+                          { label: "运营成本", key: "operating_cost_score" as const, unit: "分" },
+                          { label: "增长潜力", key: "growth_potential_score" as const, unit: "分" },
+                        ].map((metric) => {
+                          const values = compareSelected.map((code) => states[code]?.pool?.[metric.key] ?? 0);
+                          const maxVal = Math.max(...values);
+                          return (
+                            <tr key={metric.key} className="border-b border-[#f3f4f6]">
+                              <td className="py-2.5 px-3 text-[#6b7280] text-xs">{metric.label}</td>
+                              {compareSelected.map((code, idx) => {
+                                const val = values[idx];
+                                const isBest = val === maxVal && values.filter((v) => v === maxVal).length === 1;
+                                return (
+                                  <td key={code} className="text-center py-2.5 px-3">
+                                    <span className={`text-sm font-semibold ${isBest ? "text-[#6366f1]" : "text-[#374151]"}`}>
+                                      {val}
+                                      <span className="text-[10px] text-[#9ca3af] ml-0.5">{metric.unit}</span>
+                                    </span>
+                                    {isBest && (
+                                      <span className="ml-1 text-[10px] text-[#6366f1] font-medium">最优</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                        {/* Population row */}
+                        <tr className="border-b border-[#f3f4f6]">
+                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">人口</td>
+                          {compareSelected.map((code) => (
+                            <td key={code} className="text-center py-2.5 px-3 text-sm font-medium text-[#374151]">
+                              {states[code]?.pool?.population ?? "--"}
+                            </td>
+                          ))}
+                        </tr>
+                        {/* Revenue row */}
+                        <tr className="border-b border-[#f3f4f6]">
+                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">预估收入</td>
+                          {compareSelected.map((code) => (
+                            <td key={code} className="text-center py-2.5 px-3 text-sm font-medium text-[#374151]">
+                              {states[code]?.pool?.estimated_revenue || "--"}
+                            </td>
+                          ))}
+                        </tr>
+                        {/* Recommendation row */}
+                        <tr>
+                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">建议</td>
+                          {compareSelected.map((code) => {
+                            const rec = states[code]?.pool?.recommendation ?? states[code]?.pool?.go_nogo ?? "--";
+                            const isGo = rec.includes("推荐") || rec.toLowerCase() === "go";
+                            const isNo = rec.includes("不推荐") || rec.toLowerCase().includes("no");
+                            return (
+                              <td key={code} className="text-center py-2.5 px-3">
+                                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  isGo ? "bg-[#d1fae5] text-[#065f46]" : isNo ? "bg-[#fee2e2] text-[#991b1b]" : "bg-[#fef3c7] text-[#92400e]"
+                                }`}>
+                                  {rec}
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              {/* AI Comparison Summary */}
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-[#e5e7eb]/50">
+                <h4 className="text-sm font-semibold text-[#111827] mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]"></span>
+                  AI 对比摘要
+                </h4>
+                <p className="text-sm text-[#374151] leading-relaxed">
+                  {generateComparisonSummary()}
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Compare Panel Animations */}
+      <style dangerouslySetInnerHTML={{ __html: `
+        @keyframes slideUp {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+      ` }} />
     </div>
   );
 }
