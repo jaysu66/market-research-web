@@ -29,6 +29,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   lighting: "灯具",
   furniture: "家具",
   flooring: "地板",
+  sofa: "沙发/家具",
 };
 
 // Map Chinese category keys (from old localStorage) to English keys used in Supabase
@@ -39,6 +40,7 @@ const CATEGORY_KEY_MAP: Record<string, string> = {
   "灯具": "lighting",
   "家具": "furniture",
   "地板": "flooring",
+  "沙发": "sofa", "沙发/家具": "sofa",
   "瓷砖": "tiles",
 };
 
