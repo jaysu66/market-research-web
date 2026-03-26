@@ -1092,7 +1092,7 @@ export default function DashboardPage() {
                 <div>
                   <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">全国总TAM</div>
                   <div className="text-2xl font-bold font-mono text-[#2563eb]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>${totalTAM}B</div>
-                  <div className="text-xs text-zinc-400">窗帘/窗饰市场规模估算</div>
+                  <div className="text-xs text-zinc-400">{currentCategory}市场规模估算</div>
                 </div>
                 <div>
                   <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">平均竞争密度</div>
@@ -1105,7 +1105,7 @@ export default function DashboardPage() {
                   <div className="text-xs text-zinc-400">综合评分最优</div>
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">窗帘店总数</div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">{currentCategory}店总数</div>
                   <div className="text-2xl font-bold font-mono text-[#f59e0b]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{totalStores}</div>
                   <div className="text-xs text-zinc-400">NAICS 442291 [Census CBP]</div>
                 </div>
@@ -1518,7 +1518,7 @@ export default function DashboardPage() {
                           <SortHeader label="竞争强度" sortKey="competition" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="运营成本" sortKey="cost" current={sortKey} dir={sortDir} onClick={toggleSort} />
                           <SortHeader label="增长潜力" sortKey="growth" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <th>窗帘店数</th>
+                          <th>{currentCategory}店数</th>
                           <th>竞争密度</th>
                           <th>TAM($B)</th>
                           <th>回本(月)</th>
@@ -1589,7 +1589,7 @@ export default function DashboardPage() {
             <div className="max-w-[1400px] mx-auto px-6">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <div className="text-white font-bold mb-1">美国50州窗帘市场调研平台</div>
+                  <div className="text-white font-bold mb-1">美国50州{currentCategory}市场调研平台</div>
                   <div className="text-xs leading-relaxed">数据来源：US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026</div>
                 </div>
                 <div className="text-xs text-zinc-500">报告生成时间：2026年3月 · 仅供参考，不构成投资建议</div>
