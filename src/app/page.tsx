@@ -898,7 +898,7 @@ export default function DashboardPage() {
     const option = {
       color: colors,
       legend: {
-        data: selectedStates.map((s) => `${s.code} ${s.name}`),
+        data: selectedStates.map((s) => `${US_STATES_CN[s.code] || s.name} (${s.code})`),
         bottom: 0,
         textStyle: { color: "#6b7280", fontSize: 12 },
       },
@@ -928,7 +928,7 @@ export default function DashboardPage() {
               s.pool?.growth_potential_score ?? 0,
               s.pool?.overall_score ?? 0,
             ],
-            name: `${s.code} ${s.name}`,
+            name: `${US_STATES_CN[s.code] || s.name} (${s.code})`,
             lineStyle: { width: 2, color: colors[i] },
             areaStyle: { color: colors[i], opacity: 0.1 },
             itemStyle: { color: colors[i] },
@@ -981,15 +981,16 @@ export default function DashboardPage() {
       (a.pool?.competition_score ?? 0) >= (b.pool?.competition_score ?? 0) ? a : b
     );
 
-    const names = selected.map((s) => s.name).join("、");
+    const cnName = (s: StateInfo) => US_STATES_CN[s.code] || s.name;
+    const names = selected.map((s) => cnName(s)).join("、");
     const scoreDiff = (best.pool?.overall_score ?? 0) - (worst.pool?.overall_score ?? 0);
 
     let summary = `综合对比 ${names}：`;
-    summary += `${best.name} 综合评分最高（${best.pool?.overall_score ?? 0}分），`;
+    summary += `${cnName(best)} 综合评分最高（${best.pool?.overall_score ?? 0}分），`;
     if (scoreDiff <= 5) {
       summary += `各州评分接近，差距仅 ${scoreDiff} 分。`;
     } else {
-      summary += `领先 ${worst.name}（${worst.pool?.overall_score ?? 0}分）${scoreDiff} 分。`;
+      summary += `领先 ${cnName(worst)}（${worst.pool?.overall_score ?? 0}分）${scoreDiff} 分。`;
     }
 
     const advantages: string[] = [];
@@ -999,16 +1000,16 @@ export default function DashboardPage() {
     if (bestComp.code === best.code) advantages.push("竞争环境");
 
     if (advantages.length > 0) {
-      summary += ` ${best.name} 在${advantages.join("、")}方面具有优势。`;
+      summary += ` ${cnName(best)} 在${advantages.join("、")}方面具有优势。`;
     }
 
     if (bestCost.code !== best.code) {
-      summary += ` 若注重成本控制，${bestCost.name} 的运营成本评分更优（${bestCost.pool?.operating_cost_score ?? 0}分）。`;
+      summary += ` 若注重成本控制，${cnName(bestCost)} 的运营成本评分更优（${bestCost.pool?.operating_cost_score ?? 0}分）。`;
     }
 
     const bestRec = best.pool?.recommendation ?? best.pool?.go_nogo ?? "";
     if (bestRec.includes("推荐") || bestRec.toLowerCase() === "go") {
-      summary += ` 建议优先考虑 ${best.name}。`;
+      summary += ` 建议优先考虑 ${cnName(best)}。`;
     }
 
     return summary;
@@ -1052,6 +1053,7 @@ export default function DashboardPage() {
     const q = searchQuery.toLowerCase();
     return s.code.toLowerCase().includes(q) ||
            s.name.toLowerCase().includes(q) ||
+           (US_STATES_CN[s.code] ?? '').includes(q) ||
            (s.pool?.recommended_city ?? '').toLowerCase().includes(q);
   });
 
@@ -1286,7 +1288,7 @@ export default function DashboardPage() {
                   <div className="fade-in bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm">
                     <ScatterChart states={researchedStates.map(s => ({
                       code: s.code,
-                      name: s.name,
+                      name: US_STATES_CN[s.code] || s.name,
                       tam: s.pool?.tam ?? 0,
                       density: s.pool?.competition_density ?? 0,
                       income: s.pool?.median_income ?? 0,
@@ -1302,7 +1304,7 @@ export default function DashboardPage() {
                       states={sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => ({
                         rank: i + 1,
                         code: s.code,
-                        name: s.name,
+                        name: US_STATES_CN[s.code] || s.name,
                         rating_label: s.pool?.rating_label ?? '未评级',
                         rating_emoji: s.pool?.rating_emoji ?? '',
                         recommended_city: s.pool?.recommended_city ?? '',
@@ -1414,8 +1416,8 @@ export default function DashboardPage() {
                       <div key={s.code} className="card p-4">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-bold text-[#111827]">{s.code}</span>
-                            <span className="text-sm text-[#6b7280]">{s.name}</span>
+                            <span className="font-mono text-zinc-400 text-xs">{s.code}</span>
+                            <span className="font-bold text-[#111827]">{US_STATES_CN[s.code] || s.name}</span>
                           </div>
                           <span className="text-sm text-[#6366f1] font-medium">{getStepLabel(s.step)}</span>
                         </div>
@@ -1475,7 +1477,7 @@ export default function DashboardPage() {
             {researchedStates.length >= 3 && (
               <DimensionTop5 states={researchedStates.map(s => ({
                 code: s.code,
-                name: s.name,
+                name: US_STATES_CN[s.code] || s.name,
                 tam: s.pool?.tam ?? 0,
                 income: s.pool?.median_income ?? 0,
                 growth: s.pool?.growth_potential_score ?? 0,
@@ -1731,7 +1733,7 @@ export default function DashboardPage() {
                             <th key={code} className="text-center py-2.5 px-3 font-semibold text-[#111827] text-xs">
                               <span className="inline-flex items-center gap-1">
                                 {code}
-                                <span className="text-[#9ca3af] font-normal">{states[code]?.name}</span>
+                                <span className="text-[#9ca3af] font-normal">{US_STATES_CN[code] || states[code]?.name}</span>
                               </span>
                             </th>
                           ))}
