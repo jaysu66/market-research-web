@@ -28,7 +28,6 @@ const TOP10 = ["CA", "TX", "NY", "FL", "IL", "PA", "OH", "GA", "NC", "MI"];
 
 const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
-  { key: "carpet", label: "地毯" },
 ];
 
 function loadCategories(): { key: string; label: string }[] {
