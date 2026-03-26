@@ -110,7 +110,7 @@ const STATE_PATHS: Record<string, string> = {
 
 function getStateColor(data?: StateData): string {
   if (!data || data.status === "none") return "#e5e7eb";
-  if (data.status === "generating") return "#6366f1";
+  if (data.status === "generating") return "#0ea5e9";
   if (data.status === "researched" && data.recommendation) {
     const rec = data.recommendation.toLowerCase();
     if (rec.includes("推荐") && !rec.includes("不推荐")) return "#10b981";
@@ -257,7 +257,7 @@ export default function USMap({ states, onStateClick }: USMapProps) {
             </>
           )}
           {tooltip.data?.status === "generating" && (
-            <div className="text-purple-300">报告生成中...</div>
+            <div className="text-sky-300">报告生成中...</div>
           )}
           {(!tooltip.data || tooltip.data.status === "none") && (
             <div className="text-gray-400">未调研 - 点击开始</div>
@@ -298,7 +298,7 @@ export default function USMap({ states, onStateClick }: USMapProps) {
         <span className="flex items-center gap-1">
           <span
             className="inline-block w-3 h-3 rounded-sm"
-            style={{ background: "#6366f1" }}
+            style={{ background: "#0ea5e9" }}
           />
           生成中
         </span>

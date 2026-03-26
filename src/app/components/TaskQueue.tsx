@@ -396,7 +396,7 @@ export default function TaskQueue({
               {/* Status icon */}
               <div className="flex-shrink-0">
                 {task.status === "running" || task.status === "pending" ? (
-                  <div className="w-8 h-8 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
                 ) : task.status === "completed" ? (
                   <div className="w-8 h-8 rounded-full bg-[#10b981] flex items-center justify-center">
                     <svg
@@ -476,7 +476,7 @@ export default function TaskQueue({
                       className="h-full rounded-full transition-all duration-500"
                       style={{
                         width: `${task.progress ?? 0}%`,
-                        background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                        background: "linear-gradient(90deg, #0ea5e9, #0c4a6e)",
                       }}
                     />
                   </div>
@@ -503,8 +503,8 @@ export default function TaskQueue({
                 {task.status === "completed" && (
                   <a
                     href={`/report/${encodeURIComponent(task.product)}/${task.state_code}`}
-                    className="px-3 py-1.5 text-xs font-medium text-[#6366f1] bg-white border border-[#e5e7eb]
-                               hover:border-[#6366f1] hover:bg-[#eef2ff] rounded-lg transition-all"
+                    className="px-3 py-1.5 text-xs font-medium text-[#0ea5e9] bg-white border border-[#e5e7eb]
+                               hover:border-[#0ea5e9] hover:bg-[#f0f9ff] rounded-lg transition-all"
                   >
                     查看报告
                   </a>
@@ -513,7 +513,7 @@ export default function TaskQueue({
                   <button
                     onClick={() => handleRetry(task)}
                     disabled={retrying.has(task.task_id)}
-                    className="px-3 py-1.5 text-xs font-medium text-white bg-[#6366f1] hover:bg-[#4f46e5]
+                    className="px-3 py-1.5 text-xs font-medium text-white bg-[#0ea5e9] hover:bg-[#0c4a6e]
                                rounded-lg transition-all disabled:opacity-50"
                   >
                     {retrying.has(task.task_id) ? (

@@ -155,7 +155,7 @@ export default function HealthCheck({ sources }: HealthCheckProps) {
         disabled={isCheckingAll}
         className="mb-5 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white
                    rounded-lg transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-        style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+        style={{ background: "linear-gradient(135deg, #0ea5e9, #0c4a6e)" }}
       >
         {isCheckingAll ? (
           <>
@@ -210,7 +210,7 @@ export default function HealthCheck({ sources }: HealthCheckProps) {
                 </div>
                 <div className="flex-shrink-0 mt-0.5">
                   {isChecking ? (
-                    <div className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                    <div className="w-3 h-3 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
                   ) : result ? (
                     <div
                       className={`w-3 h-3 rounded-full ${
@@ -251,7 +251,7 @@ export default function HealthCheck({ sources }: HealthCheckProps) {
               )}
 
               {isChecking && (
-                <div className="text-[11px] text-[#6366f1]">正在检测...</div>
+                <div className="text-[11px] text-[#0ea5e9]">正在检测...</div>
               )}
 
               {/* Individual check button */}
@@ -259,7 +259,7 @@ export default function HealthCheck({ sources }: HealthCheckProps) {
                 onClick={() => checkSource(source)}
                 disabled={isChecking}
                 className="absolute top-3.5 right-10 opacity-0 hover:opacity-100 focus:opacity-100
-                           text-[#9ca3af] hover:text-[#6366f1] transition-all disabled:opacity-0"
+                           text-[#9ca3af] hover:text-[#0ea5e9] transition-all disabled:opacity-0"
                 title={`检测 ${source.name}`}
               >
                 <svg

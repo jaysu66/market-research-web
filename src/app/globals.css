@@ -7,11 +7,11 @@
 }
 
 :root {
-  --primary: #6366f1;
-  --primary-hover: #5558e6;
-  --primary-light: #eef2ff;
-  --gradient: linear-gradient(135deg, #6366f1, #8b5cf6);
-  --gradient-subtle: linear-gradient(135deg, #eef2ff, #f5f3ff);
+  --primary: #0f172a;
+  --primary-hover: #0c4a6e;
+  --primary-light: #f0f9ff;
+  --gradient: linear-gradient(135deg, #0f172a, #0c4a6e);
+  --gradient-subtle: linear-gradient(135deg, #f0f9ff, #e0f2fe);
 
   --success: #10b981;
   --success-light: #ecfdf5;
@@ -66,8 +66,8 @@ body {
 }
 
 @keyframes pulse-border {
-  0%, 100% { border-color: #6366f1; box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.15); }
-  50% { border-color: #8b5cf6; box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.08); }
+  0%, 100% { border-color: #0ea5e9; box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.15); }
+  50% { border-color: #38bdf8; box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.08); }
 }
 
 @keyframes shimmer {
@@ -149,14 +149,14 @@ body {
 }
 
 .state-card-empty:hover {
-  border-color: #6366f1;
-  background: #eef2ff;
+  border-color: #0ea5e9;
+  background: #f0f9ff;
   box-shadow: none;
   transform: none;
 }
 
 .state-card-generating {
-  border: 2px solid #6366f1;
+  border: 2px solid #0ea5e9;
   animation: pulse-border 2s ease-in-out infinite;
 }
 
@@ -263,7 +263,7 @@ body {
 
 .btn-primary:hover {
   opacity: 0.9;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3);
   transform: translateY(-1px);
 }
 
@@ -401,7 +401,7 @@ body {
 .report-content th, .report-content td { padding: 8px 12px; border: 1px solid var(--border-color); text-align: left; }
 .report-content th { background: #f9fafb; font-weight: 600; }
 .report-content strong { font-weight: 600; }
-.report-content blockquote { border-left: 3px solid #6366f1; padding-left: 1rem; margin: 1rem 0; color: var(--text-secondary); }
+.report-content blockquote { border-left: 3px solid #0ea5e9; padding-left: 1rem; margin: 1rem 0; color: var(--text-secondary); }
 
 /* ---- Checkbox ---- */
 

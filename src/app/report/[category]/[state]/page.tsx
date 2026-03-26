@@ -157,7 +157,7 @@ export default async function ReportPage({
           <div className="flex items-center gap-4">
             <a
               href="/"
-              className="flex items-center gap-1.5 text-sm font-medium text-[#6366f1] hover:text-[#4f46e5] transition-colors"
+              className="flex items-center gap-1.5 text-sm font-medium text-[#0ea5e9] hover:text-[#0c4a6e] transition-colors"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10 3L5 8l5 5" />
@@ -168,7 +168,7 @@ export default async function ReportPage({
             <div className="flex items-center gap-2">
               <span
                 className="inline-flex items-center justify-center w-7 h-7 rounded-md text-[11px] font-bold text-white"
-                style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+                style={{ background: "linear-gradient(135deg, #0f172a, #0c4a6e)" }}
               >
                 {stateCode}
               </span>
@@ -184,7 +184,7 @@ export default async function ReportPage({
                   key={d.label}
                   href={d.url}
                   download
-                  className="inline-flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb] hover:border-[#6366f1] hover:text-[#6366f1] transition-all"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb] hover:border-[#0ea5e9] hover:text-[#0ea5e9] transition-all"
                 >
                   {d.icon === "doc" ? (
                     <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -233,7 +233,7 @@ export default async function ReportPage({
             </p>
             <a
               href="/"
-              className="inline-flex items-center gap-1.5 text-sm text-[#6366f1] hover:text-[#4f46e5] font-medium"
+              className="inline-flex items-center gap-1.5 text-sm text-[#0ea5e9] hover:text-[#0c4a6e] font-medium"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M10 3L5 8l5 5" />

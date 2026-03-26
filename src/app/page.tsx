@@ -497,6 +497,37 @@ export default function DashboardPage() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [scrollProgress, setScrollProgress] = useState(0);
 
+  // Language toggle
+  const [lang, setLang] = useState<'cn' | 'en'>('cn');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('market_lang');
+    if (saved === 'en') setLang('en');
+  }, []);
+
+  const toggleLang = () => {
+    const next = lang === 'cn' ? 'en' : 'cn';
+    setLang(next);
+    localStorage.setItem('market_lang', next);
+  };
+
+  const t = (cn: string, en: string) => lang === 'cn' ? cn : en;
+  const stateName = (code: string) => lang === 'cn'
+    ? `${US_STATES_CN[code]} (${code})`
+    : `${US_STATES[code]} (${code})`;
+  const stateDisplayName = (code: string) => lang === 'cn'
+    ? (US_STATES_CN[code] || US_STATES[code])
+    : US_STATES[code];
+  const ratingLabel = (label: string) => {
+    if (lang === 'en') {
+      const map: Record<string, string> = {
+        '强烈推荐': 'Strong Buy', '推荐': 'Buy', '谨慎': 'Hold', '不推荐': 'Avoid',
+      };
+      return map[label] || label;
+    }
+    return label;
+  };
+
   // Load categories from localStorage
   useEffect(() => {
     setCatList(loadCategories());
@@ -892,29 +923,29 @@ export default function DashboardPage() {
     }
 
     const chart = echarts.init(radarChartRef.current);
-    const colors = ["#6366f1", "#10b981", "#f59e0b"];
+    const colors = ["#0ea5e9", "#10b981", "#f59e0b"];
     const selectedStates = compareSelected.map((code) => states[code]).filter(Boolean);
 
     const option = {
       color: colors,
       legend: {
-        data: selectedStates.map((s) => `${US_STATES_CN[s.code] || s.name} (${s.code})`),
+        data: selectedStates.map((s) => `${stateDisplayName(s.code)} (${s.code})`),
         bottom: 0,
         textStyle: { color: "#6b7280", fontSize: 12 },
       },
       radar: {
         indicator: [
-          { name: "市场规模", max: 100 },
-          { name: "竞争强度", max: 100 },
-          { name: "运营成本", max: 100 },
-          { name: "增长潜力", max: 100 },
-          { name: "综合评分", max: 100 },
+          { name: t("市场规模", "Market"), max: 100 },
+          { name: t("竞争强度", "Competition"), max: 100 },
+          { name: t("运营成本", "Cost"), max: 100 },
+          { name: t("增长潜力", "Growth"), max: 100 },
+          { name: t("综合评分", "Overall"), max: 100 },
         ],
         shape: "circle",
         splitNumber: 4,
         axisName: { color: "#374151", fontSize: 12 },
         splitLine: { lineStyle: { color: "#e5e7eb" } },
-        splitArea: { areaStyle: { color: ["rgba(99,102,241,0.02)", "rgba(99,102,241,0.05)"] } },
+        splitArea: { areaStyle: { color: ["rgba(14,165,233,0.02)", "rgba(14,165,233,0.05)"] } },
         axisLine: { lineStyle: { color: "#e5e7eb" } },
       },
       series: [
@@ -928,7 +959,7 @@ export default function DashboardPage() {
               s.pool?.growth_potential_score ?? 0,
               s.pool?.overall_score ?? 0,
             ],
-            name: `${US_STATES_CN[s.code] || s.name} (${s.code})`,
+            name: `${stateDisplayName(s.code)} (${s.code})`,
             lineStyle: { width: 2, color: colors[i] },
             areaStyle: { color: colors[i], opacity: 0.1 },
             itemStyle: { color: colors[i] },
@@ -1060,7 +1091,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen flex flex-col bg-[#fafafa]">
       {/* Scroll Progress */}
-      <div className="fixed top-0 left-0 h-[3px] bg-gradient-to-r from-blue-600 to-purple-600 z-[9999] transition-all duration-100"
+      <div className="fixed top-0 left-0 h-[3px] bg-gradient-to-r from-sky-500 to-cyan-500 z-[9999] transition-all duration-100"
         style={{ width: `${scrollProgress}%` }} />
       {/* ---- Sticky Nav ---- */}
       <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-[#e5e7eb]">
@@ -1087,22 +1118,27 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-          <a href="/workspace" className="btn-secondary text-sm">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <rect x="2" y="2" width="5" height="5" rx="1" />
-              <rect x="9" y="2" width="5" height="5" rx="1" />
-              <rect x="2" y="9" width="5" height="5" rx="1" />
-              <rect x="9" y="9" width="5" height="5" rx="1" />
-            </svg>
-            工作台
-          </a>
+          <div className="flex items-center gap-2">
+            <button onClick={toggleLang} className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 transition-colors font-medium">
+              {lang === 'cn' ? '中/EN' : 'CN/En'}
+            </button>
+            <a href="/workspace" className="btn-secondary text-sm">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="2" y="2" width="5" height="5" rx="1" />
+                <rect x="9" y="2" width="5" height="5" rx="1" />
+                <rect x="2" y="9" width="5" height="5" rx="1" />
+                <rect x="9" y="9" width="5" height="5" rx="1" />
+              </svg>
+              {t('工作台', 'Workspace')}
+            </a>
+          </div>
         </div>
       </nav>
 
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-20">
-          <div className="w-8 h-8 border-3 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+          <div className="w-8 h-8 border-3 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
         </div>
       )}
 
@@ -1118,28 +1154,31 @@ export default function DashboardPage() {
                   { label: "Census ACS 2023", cls: "bg-blue-600/20 text-blue-400 border-blue-600/30" },
                   { label: "FRED 2024", cls: "bg-green-600/20 text-green-400 border-green-600/30" },
                   { label: "BLS 2024", cls: "bg-amber-600/20 text-amber-400 border-amber-600/30" },
-                  { label: "Census CBP 2022", cls: "bg-purple-600/20 text-purple-400 border-purple-600/30" },
+                  { label: "Census CBP 2022", cls: "bg-sky-600/20 text-sky-400 border-sky-600/30" },
                   { label: "Perplexity Sonar", cls: "bg-cyan-600/20 text-cyan-400 border-cyan-600/30" },
                 ].map(s => (
                   <span key={s.label} className={`text-xs font-mono px-2 py-1 rounded border ${s.cls}`}>{s.label}</span>
                 ))}
               </div>
               <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">
-                美国50州<br />
-                <span className="text-blue-400">{currentCategory}</span>市场调研平台
+                {t('美国50州', 'US 50 States')}<br />
+                <span className="text-blue-400">{currentCategory}</span>{t('市场调研平台', ' Market Research')}
               </h1>
               <p className="text-zinc-400 text-lg max-w-2xl mb-6">
-                基于 Census、FRED、BLS、HUD 官方数据及AI深度搜索，为每个州生成完整的市场调研报告与投资决策建议。
+                {t(
+                  '基于 Census、FRED、BLS、HUD 官方数据及AI深度搜索，为每个州生成完整的市场调研报告与投资决策建议。',
+                  'Powered by Census, FRED, BLS, HUD official data and AI deep search. Generate complete market research reports and investment recommendations for every state.'
+                )}
               </p>
               {/* 全局统计数字行 */}
               <div className="flex gap-6 text-sm text-zinc-400 flex-wrap">
-                <span><strong className="text-white">{researchedCount}</strong> 个州已调研</span>
+                <span><strong className="text-white">{researchedCount}</strong> {t('个州已调研', 'states researched')}</span>
                 <span className="hidden sm:inline">&middot;</span>
-                <span><strong className="text-white">{totalStores}</strong> 家竞争商家</span>
+                <span><strong className="text-white">{totalStores}</strong> {t('家竞争商家', 'competitors')}</span>
                 <span className="hidden sm:inline">&middot;</span>
-                <span>总TAM <strong className="text-white">${totalTAM}B</strong></span>
+                <span>{t('总TAM', 'Total TAM')} <strong className="text-white">${totalTAM}B</strong></span>
                 <span className="hidden sm:inline">&middot;</span>
-                <span><strong className="text-white">{stronglyRecommendedCount}</strong> 个强烈推荐州</span>
+                <span><strong className="text-white">{stronglyRecommendedCount}</strong> {t('个强烈推荐州', 'strongly recommended')}</span>
               </div>
               {/* Batch generate button */}
               {unresearchedCodes.length > 0 && (
@@ -1147,20 +1186,20 @@ export default function DashboardPage() {
                   {batchRunning ? (
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg text-sm text-zinc-300">
                       <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
-                      正在批量生成中...（{generatingCount} 个州在队列中）
+                      {t(`正在批量生成中...（${generatingCount} 个州在队列中）`, `Batch generating... (${generatingCount} states in queue)`)}
                     </div>
                   ) : batchConfirm ? (
                     <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/10 rounded-lg text-sm">
-                      <span className="text-zinc-300">确认生成剩余 <strong className="text-white">{unresearchedCodes.length}</strong> 个州？预计耗时 {Math.ceil(unresearchedCodes.length * 20)} 分钟</span>
-                      <button onClick={startBatchAll} className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-500 transition-colors">确认开始</button>
-                      <button onClick={() => setBatchConfirm(false)} className="px-3 py-1 bg-white/10 text-zinc-400 rounded-md text-xs hover:bg-white/20 transition-colors">取消</button>
+                      <span className="text-zinc-300">{t(`确认生成剩余`, 'Generate remaining')} <strong className="text-white">{unresearchedCodes.length}</strong> {t(`个州？预计耗时 ${Math.ceil(unresearchedCodes.length * 20)} 分钟`, ` states? Est. ${Math.ceil(unresearchedCodes.length * 20)} min`)}</span>
+                      <button onClick={startBatchAll} className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-500 transition-colors">{t('确认开始', 'Confirm')}</button>
+                      <button onClick={() => setBatchConfirm(false)} className="px-3 py-1 bg-white/10 text-zinc-400 rounded-md text-xs hover:bg-white/20 transition-colors">{t('取消', 'Cancel')}</button>
                     </div>
                   ) : (
                     <button
                       onClick={() => setBatchConfirm(true)}
                       className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-600/30 transition-colors"
                     >
-                      🚀 一键生成剩余 {unresearchedCodes.length} 个州
+                      {t(`🚀 一键生成剩余 ${unresearchedCodes.length} 个州`, `🚀 Generate all ${unresearchedCodes.length} remaining states`)}
                     </button>
                   )}
                 </div>
@@ -1173,22 +1212,22 @@ export default function DashboardPage() {
             <div className="max-w-[1400px] mx-auto px-6 py-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">全国总TAM</div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">{t('全国总TAM', 'Total TAM')}</div>
                   <div className="text-2xl font-bold font-mono text-[#2563eb]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>${totalTAM}B</div>
-                  <div className="text-xs text-zinc-400">{currentCategory}市场规模估算</div>
+                  <div className="text-xs text-zinc-400">{t(`${currentCategory}市场规模估算`, `${currentCategory} market size est.`)}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">平均竞争密度</div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">{t('平均竞争密度', 'Avg Density')}</div>
                   <div className="text-2xl font-bold font-mono text-[#10b981]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{avgDensity}</div>
-                  <div className="text-xs text-zinc-400">店/万人（已调研均值）</div>
+                  <div className="text-xs text-zinc-400">{t('店/万人（已调研均值）', 'stores/10K pop (avg)')}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">强烈推荐州</div>
-                  <div className="text-2xl font-bold font-mono text-[#15803d]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{stronglyRecommendedCount} 个</div>
-                  <div className="text-xs text-zinc-400">综合评分最优</div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">{t('强烈推荐州', 'Top Rated')}</div>
+                  <div className="text-2xl font-bold font-mono text-[#15803d]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{stronglyRecommendedCount} {t('个', '')}</div>
+                  <div className="text-xs text-zinc-400">{t('综合评分最优', 'Highest overall score')}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">{currentCategory}店总数</div>
+                  <div className="text-[11px] uppercase tracking-wider text-zinc-500 mb-0.5">{t(`${currentCategory}店总数`, 'Total Stores')}</div>
                   <div className="text-2xl font-bold font-mono text-[#f59e0b]" style={{ fontFamily: "'JetBrains Mono', monospace" }}>{totalStores}</div>
                   <div className="text-xs text-zinc-400">NAICS 442291 [Census CBP]</div>
                 </div>
@@ -1205,21 +1244,21 @@ export default function DashboardPage() {
                 <section className="fade-in">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h2 className="text-xl font-bold text-zinc-900 mb-1">美国地图 — 市场评级热力图</h2>
-                      <p className="text-sm text-zinc-500 mb-4">点击任意州查看详细报告 · 颜色代表评级</p>
+                      <h2 className="text-xl font-bold text-zinc-900 mb-1">{t('美国地图 — 市场评级热力图', 'US Map — Market Rating Heatmap')}</h2>
+                      <p className="text-sm text-zinc-500 mb-4">{t('点击任意州查看详细报告 · 颜色代表评级', 'Click any state for details · Color = rating')}</p>
                     </div>
                     <div className="map-view-toggle">
                       <button
                         className={mapView === "tile" ? "active" : ""}
                         onClick={() => setMapView("tile")}
                       >
-                        方块
+                        {t('方块', 'Tile')}
                       </button>
                       <button
                         className={mapView === "svg" ? "active" : ""}
                         onClick={() => setMapView("svg")}
                       >
-                        地图
+                        {t('地图', 'Map')}
                       </button>
                     </div>
                   </div>
@@ -1243,9 +1282,9 @@ export default function DashboardPage() {
                               if (rec.includes("推荐") || rec.toLowerCase() === "go") bgColor = "#10b981";
                               else if (rec.includes("谨慎") || rec.includes("观望")) bgColor = "#f59e0b";
                               else if (rec.includes("不推荐") || rec.toLowerCase().includes("no")) bgColor = "#ef4444";
-                              else bgColor = "#6366f1";
+                              else bgColor = "#0ea5e9";
                             }
-                            if (isGenerating) bgColor = "#c7d2fe";
+                            if (isGenerating) bgColor = "#bae6fd";
 
                             return (
                               <div
@@ -1257,7 +1296,7 @@ export default function DashboardPage() {
                                   backgroundColor: bgColor,
                                 }}
                                 onClick={(e) => handleCardClick(code, e)}
-                                title={`${US_STATES_CN[code]} (${code}) ${score ? `${score}分` : hasReport ? "已调研" : "未调研"}`}
+                                title={`${stateDisplayName(code)} (${code}) ${score ? `${score}${t('分', 'pts')}` : hasReport ? t("已调研", "Researched") : t("未调研", "Not researched")}`}
                               >
                                 <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
                                   {code}
@@ -1273,12 +1312,12 @@ export default function DashboardPage() {
                     )}
                     {/* Legend */}
                     <div className="flex items-center justify-center gap-6 mt-4 text-xs text-[#6b7280] flex-wrap">
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#10b981]"></span> 强烈推荐</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#eab308]"></span> 推荐</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#f59e0b]"></span> 谨慎</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#ef4444]"></span> 不推荐</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#c7d2fe]"></span> 生成中</span>
-                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#e5e7eb]"></span> 未调研</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#10b981]"></span> {t('强烈推荐', 'Strong Buy')}</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#eab308]"></span> {t('推荐', 'Buy')}</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#f59e0b]"></span> {t('谨慎', 'Hold')}</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#ef4444]"></span> {t('不推荐', 'Avoid')}</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#bae6fd]"></span> {t('生成中', 'Generating')}</span>
+                      <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#e5e7eb]"></span> {t('未调研', 'Not researched')}</span>
                     </div>
                   </div>
                 </section>
@@ -1288,7 +1327,7 @@ export default function DashboardPage() {
                   <div className="fade-in bg-white rounded-2xl border border-zinc-200 p-4 shadow-sm">
                     <ScatterChart states={researchedStates.map(s => ({
                       code: s.code,
-                      name: US_STATES_CN[s.code] || s.name,
+                      name: stateDisplayName(s.code),
                       tam: s.pool?.tam ?? 0,
                       density: s.pool?.competition_density ?? 0,
                       income: s.pool?.median_income ?? 0,
@@ -1301,10 +1340,11 @@ export default function DashboardPage() {
                 {researchedStates.length > 0 && (
                   <section className="fade-in">
                     <TopStatesCards
+                      lang={lang}
                       states={sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => ({
                         rank: i + 1,
                         code: s.code,
-                        name: US_STATES_CN[s.code] || s.name,
+                        name: stateDisplayName(s.code),
                         rating_label: s.pool?.rating_label ?? '未评级',
                         rating_emoji: s.pool?.rating_emoji ?? '',
                         recommended_city: s.pool?.recommended_city ?? '',
@@ -1328,8 +1368,8 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 {generatingCount > 0 && (
-                  <div className="flex items-center gap-2 text-sm text-[#6366f1]">
-                    <div className="w-4 h-4 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                  <div className="flex items-center gap-2 text-sm text-[#0ea5e9]">
+                    <div className="w-4 h-4 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
                     {generatingCount} 个州正在生成中
                   </div>
                 )}
@@ -1365,7 +1405,7 @@ export default function DashboardPage() {
                       )}
 
                       <span className={`text-base font-bold leading-none ${
-                        hasReport ? "text-[#111827]" : isGenerating ? "text-[#6366f1]" : "text-[#9ca3af]"
+                        hasReport ? "text-[#111827]" : isGenerating ? "text-[#0ea5e9]" : "text-[#9ca3af]"
                       }`}>
                         {code}
                       </span>
@@ -1381,8 +1421,8 @@ export default function DashboardPage() {
 
                       {isGenerating && (
                         <div className="flex flex-col items-center gap-1 mt-1.5">
-                          <div className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
-                          <span className="text-[10px] text-[#6366f1] leading-tight text-center">
+                          <div className="w-3 h-3 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
+                          <span className="text-[10px] text-[#0ea5e9] leading-tight text-center">
                             {getStepLabel(info.step)}
                           </span>
                           {info.progress > 0 && (
@@ -1410,16 +1450,16 @@ export default function DashboardPage() {
               if (generatingStates.length === 0) return null;
               return (
                 <section className="mb-10">
-                  <h2 className="text-lg font-bold text-[#111827] mb-4">生成进度</h2>
+                  <h2 className="text-lg font-bold text-[#111827] mb-4">{t('生成进度', 'Generation Progress')}</h2>
                   <div className="grid gap-3">
                     {generatingStates.map(s => (
                       <div key={s.code} className="card p-4">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-zinc-400 text-xs">{s.code}</span>
-                            <span className="font-bold text-[#111827]">{US_STATES_CN[s.code] || s.name}</span>
+                            <span className="font-bold text-[#111827]">{stateDisplayName(s.code)}</span>
                           </div>
-                          <span className="text-sm text-[#6366f1] font-medium">{getStepLabel(s.step)}</span>
+                          <span className="text-sm text-[#0ea5e9] font-medium">{getStepLabel(s.step)}</span>
                         </div>
                         <div className="flex gap-1">
                           {['collecting','searching','cleaning','generating','exporting'].map((step, i) => {
@@ -1430,10 +1470,10 @@ export default function DashboardPage() {
                               <div key={step} className="flex-1 flex flex-col items-center gap-1">
                                 <div
                                   className={`h-1.5 w-full rounded-full ${
-                                    isDone ? 'bg-[#10b981]' : isCurrent ? 'bg-[#6366f1] animate-pulse' : 'bg-[#e5e7eb]'
+                                    isDone ? 'bg-[#10b981]' : isCurrent ? 'bg-[#0ea5e9] animate-pulse' : 'bg-[#e5e7eb]'
                                   }`}
                                 />
-                                <span className={`text-[9px] ${isCurrent ? 'text-[#6366f1] font-medium' : isDone ? 'text-[#10b981]' : 'text-[#9ca3af]'}`}>
+                                <span className={`text-[9px] ${isCurrent ? 'text-[#0ea5e9] font-medium' : isDone ? 'text-[#10b981]' : 'text-[#9ca3af]'}`}>
                                   {['采集','搜索','清洗','生成','导出'][i]}
                                 </span>
                               </div>
@@ -1456,17 +1496,20 @@ export default function DashboardPage() {
                   style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', position: 'fixed', zIndex: 9999 }}
                 >
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base font-bold">{US_STATES_CN[confirmState]} ({confirmState})</span>
+                    <span className="text-base font-bold">{stateName(confirmState)}</span>
                   </div>
                   <p className="text-sm text-[#6b7280] mb-4">
-                    确认为该州生成 <strong className="text-[#111827]">{catList.find(c => c.key === category)?.label}</strong> 市场调研报告？
+                    {t(
+                      `确认为该州生成 `,
+                      'Generate '
+                    )}<strong className="text-[#111827]">{catList.find(c => c.key === category)?.label}</strong>{t(' 市场调研报告？', ' market research report for this state?')}
                   </p>
                   <div className="flex gap-2 justify-end">
                     <button onClick={() => setConfirmState(null)} className="btn-ghost text-sm">
-                      取消
+                      {t('取消', 'Cancel')}
                     </button>
                     <button onClick={() => startGeneration(confirmState)} className="btn-primary text-sm">
-                      确认生成
+                      {t('确认生成', 'Generate')}
                     </button>
                   </div>
                 </div>
@@ -1477,7 +1520,7 @@ export default function DashboardPage() {
             {researchedStates.length >= 3 && (
               <DimensionTop5 states={researchedStates.map(s => ({
                 code: s.code,
-                name: US_STATES_CN[s.code] || s.name,
+                name: stateDisplayName(s.code),
                 tam: s.pool?.tam ?? 0,
                 income: s.pool?.median_income ?? 0,
                 growth: s.pool?.growth_potential_score ?? 0,
@@ -1489,19 +1532,20 @@ export default function DashboardPage() {
             {sortedStates.length > 0 && (
               <section className="fade-in mb-12">
                 <div className="mb-4">
-                  <h2 className="text-xl font-bold text-zinc-900 mb-1">50州综合排名表</h2>
-                  <p className="text-sm text-zinc-500 mb-4">点击列标题排序 · 点击行查看详细报告</p>
+                  <h2 className="text-xl font-bold text-zinc-900 mb-1">{t('50州综合排名表', '50 States Ranking')}</h2>
+                  <p className="text-sm text-zinc-500 mb-4">{t('点击列标题排序 · 点击行查看详细报告', 'Click header to sort · Click row for details')}</p>
                 </div>
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <input
                       type="text"
-                      placeholder="搜索州名/城市..."
+                      placeholder={t("搜索州名/城市...", "Search state/city...")}
+
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="px-3 py-2 border border-zinc-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-[#6366f1]/30"
+                      className="px-3 py-2 border border-zinc-200 rounded-lg text-sm w-56 focus:outline-none focus:ring-2 focus:ring-[#0ea5e9]/30"
                     />
-                    <span className="text-sm text-zinc-400">共 {filteredStates.length} 个州</span>
+                    <span className="text-sm text-zinc-400">{t(`共 ${filteredStates.length} 个州`, `${filteredStates.length} states`)}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     {compareMode && compareSelected.length >= 2 && (
@@ -1512,12 +1556,12 @@ export default function DashboardPage() {
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                           <path d="M4 12V6M8 12V4M12 12V8" />
                         </svg>
-                        对比 {compareSelected.length} 个州
+                        {t(`对比 ${compareSelected.length} 个州`, `Compare ${compareSelected.length} states`)}
                       </button>
                     )}
                     {compareMode ? (
                       <button onClick={exitCompareMode} className="btn-ghost text-sm">
-                        退出对比
+                        {t('退出对比', 'Exit Compare')}
                       </button>
                     ) : (
                       <button
@@ -1527,19 +1571,19 @@ export default function DashboardPage() {
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                           <path d="M4 12V6M8 12V4M12 12V8" />
                         </svg>
-                        对比模式
+                        {t('对比模式', 'Compare')}
                       </button>
                     )}
                   </div>
                 </div>
                 {compareMode && (
-                  <div className="mb-4 p-3 rounded-xl bg-[#f5f3ff] border border-[#e0e7ff] text-sm text-[#6366f1] flex items-center justify-between">
+                  <div className="mb-4 p-3 rounded-xl bg-[#f0f9ff] border border-[#bae6fd] text-sm text-[#0f172a] flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
                         <circle cx="8" cy="8" r="6" />
                         <path d="M8 5v3M8 10.5v.5" strokeLinecap="round" />
                       </svg>
-                      勾选要对比的州（已选 {compareSelected.length}）
+                      {t(`勾选要对比的州（已选 ${compareSelected.length}）`, `Select states to compare (${compareSelected.length} selected)`)}
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -1547,16 +1591,16 @@ export default function DashboardPage() {
                           const researched = sortedStates.filter((s) => s.report).map((s) => s.code);
                           setCompareSelected(researched);
                         }}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-[#6366f1] text-white hover:bg-[#4f46e5] transition-colors"
+                        className="text-xs px-2.5 py-1 rounded-lg bg-[#0f172a] text-white hover:bg-[#0c4a6e] transition-colors"
                       >
-                        全选已调研
+                        {t('全选已调研', 'Select All')}
                       </button>
                       {compareSelected.length > 0 && (
                         <button
                           onClick={() => setCompareSelected([])}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#e0e7ff] text-[#6366f1] hover:bg-[#f5f3ff] transition-colors"
+                          className="text-xs px-2.5 py-1 rounded-lg bg-white border border-[#bae6fd] text-[#0f172a] hover:bg-[#f0f9ff] transition-colors"
                         >
-                          清空
+                          {t('清空', 'Clear')}
                         </button>
                       )}
                     </div>
@@ -1569,18 +1613,18 @@ export default function DashboardPage() {
                         <tr className="bg-[#f9fafb]">
                           {compareMode && <th className="w-12"></th>}
                           <th className="w-16">#</th>
-                          <SortHeader label="州" sortKey="state" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <th>评级</th>
-                          <SortHeader label="综合评分" sortKey="overall" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <SortHeader label="市场规模" sortKey="market" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <SortHeader label="竞争强度" sortKey="competition" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <SortHeader label="运营成本" sortKey="cost" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <SortHeader label="增长潜力" sortKey="growth" current={sortKey} dir={sortDir} onClick={toggleSort} />
-                          <th>{currentCategory}店数</th>
-                          <th>竞争密度</th>
+                          <SortHeader label={t("州", "State")} sortKey="state" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <th>{t('评级', 'Rating')}</th>
+                          <SortHeader label={t("综合评分", "Overall")} sortKey="overall" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label={t("市场规模", "Market Size")} sortKey="market" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label={t("竞争强度", "Competition")} sortKey="competition" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label={t("运营成本", "Cost")} sortKey="cost" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <SortHeader label={t("增长潜力", "Growth")} sortKey="growth" current={sortKey} dir={sortDir} onClick={toggleSort} />
+                          <th>{t(`${currentCategory}店数`, 'Stores')}</th>
+                          <th>{t('竞争密度', 'Density')}</th>
                           <th>TAM($B)</th>
-                          <th>回本(月)</th>
-                          <th>推荐城市</th>
+                          <th>{t('回本(月)', 'Payback')}</th>
+                          <th>{t('推荐城市', 'City')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1589,7 +1633,7 @@ export default function DashboardPage() {
                           return (
                             <tr
                               key={s.code}
-                              className={`cursor-pointer ${compareMode && compareSelected.includes(s.code) ? "bg-[#f5f3ff]" : ""}`}
+                              className={`cursor-pointer ${compareMode && compareSelected.includes(s.code) ? "bg-[#f0f9ff]" : ""}`}
                               onClick={() => {
                                 if (compareMode) {
                                   toggleCompareSelect(s.code);
@@ -1605,7 +1649,7 @@ export default function DashboardPage() {
                                     checked={compareSelected.includes(s.code)}
                                     onChange={() => toggleCompareSelect(s.code)}
                                     disabled={false}
-                                    className="w-4 h-4 rounded border-[#d1d5db] text-[#6366f1] focus:ring-[#6366f1] cursor-pointer accent-[#6366f1]"
+                                    className="w-4 h-4 rounded border-[#d1d5db] text-[#0ea5e9] focus:ring-[#0ea5e9] cursor-pointer accent-[#0ea5e9]"
                                   />
                                 </td>
                               )}
@@ -1613,12 +1657,12 @@ export default function DashboardPage() {
                               <td>
                                 <div className="flex items-center gap-2">
                                   <span className="font-mono text-zinc-400 text-xs">{s.code}</span>
-                                  <span className="font-bold text-[#111827]">{US_STATES_CN[s.code] || s.name}</span>
+                                  <span className="font-bold text-[#111827]">{stateDisplayName(s.code)}</span>
                                 </div>
                               </td>
                               <td>
                                 <span className="text-sm whitespace-nowrap">
-                                  {p?.rating_emoji ?? ''} {p?.rating_label ?? '--'}
+                                  {p?.rating_emoji ?? ''} {ratingLabel(p?.rating_label ?? '--')}
                                 </span>
                               </td>
                               <td><ScoreCell value={p?.overall_score} /></td>
@@ -1647,10 +1691,10 @@ export default function DashboardPage() {
             <div className="max-w-[1400px] mx-auto px-6">
               <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div>
-                  <div className="text-white font-bold mb-1">美国50州{currentCategory}市场调研平台</div>
-                  <div className="text-xs leading-relaxed">数据来源：US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026</div>
+                  <div className="text-white font-bold mb-1">{t(`美国50州${currentCategory}市场调研平台`, `US 50 States ${currentCategory} Market Research`)}</div>
+                  <div className="text-xs leading-relaxed">{t('数据来源：US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026', 'Data: US Census Bureau ACS 2023 | Census Business Patterns 2022 | FRED 2024 | BLS OEWS 2024 | HUD Fair Market Rent 2026')}</div>
                 </div>
-                <div className="text-xs text-zinc-500">报告生成时间：2026年3月 · 仅供参考，不构成投资建议</div>
+                <div className="text-xs text-zinc-500">{t('报告生成时间：2026年3月 · 仅供参考，不构成投资建议', 'Generated: Mar 2026 · For reference only, not investment advice')}</div>
               </div>
             </div>
           </footer>
@@ -1673,7 +1717,7 @@ export default function DashboardPage() {
               background: "rgba(255,255,255,0.85)",
               backdropFilter: "blur(20px)",
               WebkitBackdropFilter: "blur(20px)",
-              borderTop: "1px solid rgba(99,102,241,0.2)",
+              borderTop: "1px solid rgba(14,165,233,0.2)",
               borderRadius: "24px 24px 0 0",
               boxShadow: "0 -8px 40px rgba(0,0,0,0.12)",
               animation: "slideUp 0.4s cubic-bezier(0.16,1,0.3,1)",
@@ -1684,13 +1728,13 @@ export default function DashboardPage() {
               style={{ background: "rgba(255,255,255,0.9)", backdropFilter: "blur(10px)", borderRadius: "24px 24px 0 0" }}>
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm font-bold"
-                  style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}>
+                  style={{ background: "linear-gradient(135deg, #0f172a, #0c4a6e)" }}>
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <path d="M4 12V6M8 12V4M12 12V8" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-[#111827]">跨州对比分析</h3>
+                  <h3 className="text-lg font-bold text-[#111827]">{t('跨州对比分析', 'Cross-State Comparison')}</h3>
                   <p className="text-xs text-[#6b7280]">
                     {compareSelected.map((c) => `${states[c]?.name ?? c}`).join(" vs ")}
                   </p>
@@ -1712,8 +1756,8 @@ export default function DashboardPage() {
                 {/* Radar Chart */}
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-[#e5e7eb]/50">
                   <h4 className="text-sm font-semibold text-[#111827] mb-3 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#6366f1]"></span>
-                    五维雷达图
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#0ea5e9]"></span>
+                    {t('五维雷达图', 'Radar Chart')}
                   </h4>
                   <div ref={radarChartRef} style={{ width: "100%", height: 320 }} />
                 </div>
@@ -1722,18 +1766,18 @@ export default function DashboardPage() {
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-[#e5e7eb]/50">
                   <h4 className="text-sm font-semibold text-[#111827] mb-3 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]"></span>
-                    关键指标对比
+                    {t('关键指标对比', 'Key Metrics')}
                   </h4>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-[#e5e7eb]">
-                          <th className="text-left py-2.5 px-3 text-[#6b7280] font-medium text-xs">指标</th>
+                          <th className="text-left py-2.5 px-3 text-[#6b7280] font-medium text-xs">{t('指标', 'Metric')}</th>
                           {compareSelected.map((code) => (
                             <th key={code} className="text-center py-2.5 px-3 font-semibold text-[#111827] text-xs">
                               <span className="inline-flex items-center gap-1">
                                 {code}
-                                <span className="text-[#9ca3af] font-normal">{US_STATES_CN[code] || states[code]?.name}</span>
+                                <span className="text-[#9ca3af] font-normal">{stateDisplayName(code)}</span>
                               </span>
                             </th>
                           ))}
@@ -1741,11 +1785,11 @@ export default function DashboardPage() {
                       </thead>
                       <tbody>
                         {[
-                          { label: "综合评分", key: "overall_score" as const, unit: "分" },
-                          { label: "市场规模", key: "market_size_score" as const, unit: "分" },
-                          { label: "竞争强度", key: "competition_score" as const, unit: "分" },
-                          { label: "运营成本", key: "operating_cost_score" as const, unit: "分" },
-                          { label: "增长潜力", key: "growth_potential_score" as const, unit: "分" },
+                          { label: t("综合评分", "Overall"), key: "overall_score" as const, unit: t("分", "pts") },
+                          { label: t("市场规模", "Market"), key: "market_size_score" as const, unit: t("分", "pts") },
+                          { label: t("竞争强度", "Competition"), key: "competition_score" as const, unit: t("分", "pts") },
+                          { label: t("运营成本", "Cost"), key: "operating_cost_score" as const, unit: t("分", "pts") },
+                          { label: t("增长潜力", "Growth"), key: "growth_potential_score" as const, unit: t("分", "pts") },
                         ].map((metric) => {
                           const values = compareSelected.map((code) => states[code]?.pool?.[metric.key] ?? 0);
                           const maxVal = Math.max(...values);
@@ -1757,12 +1801,12 @@ export default function DashboardPage() {
                                 const isBest = val === maxVal && values.filter((v) => v === maxVal).length === 1;
                                 return (
                                   <td key={code} className="text-center py-2.5 px-3">
-                                    <span className={`text-sm font-semibold ${isBest ? "text-[#6366f1]" : "text-[#374151]"}`}>
+                                    <span className={`text-sm font-semibold ${isBest ? "text-[#0ea5e9]" : "text-[#374151]"}`}>
                                       {val}
                                       <span className="text-[10px] text-[#9ca3af] ml-0.5">{metric.unit}</span>
                                     </span>
                                     {isBest && (
-                                      <span className="ml-1 text-[10px] text-[#6366f1] font-medium">最优</span>
+                                      <span className="ml-1 text-[10px] text-[#0ea5e9] font-medium">{t('最优', 'Best')}</span>
                                     )}
                                   </td>
                                 );
@@ -1772,7 +1816,7 @@ export default function DashboardPage() {
                         })}
                         {/* Population row */}
                         <tr className="border-b border-[#f3f4f6]">
-                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">人口</td>
+                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">{t('人口', 'Population')}</td>
                           {compareSelected.map((code) => (
                             <td key={code} className="text-center py-2.5 px-3 text-sm font-medium text-[#374151]">
                               {states[code]?.pool?.population ?? "--"}
@@ -1781,7 +1825,7 @@ export default function DashboardPage() {
                         </tr>
                         {/* Revenue row */}
                         <tr className="border-b border-[#f3f4f6]">
-                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">预估收入</td>
+                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">{t('预估收入', 'Est. Revenue')}</td>
                           {compareSelected.map((code) => (
                             <td key={code} className="text-center py-2.5 px-3 text-sm font-medium text-[#374151]">
                               {states[code]?.pool?.estimated_revenue || "--"}
@@ -1790,7 +1834,7 @@ export default function DashboardPage() {
                         </tr>
                         {/* Recommendation row */}
                         <tr>
-                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">建议</td>
+                          <td className="py-2.5 px-3 text-[#6b7280] text-xs">{t('建议', 'Recommendation')}</td>
                           {compareSelected.map((code) => {
                             const rec = states[code]?.pool?.recommendation ?? states[code]?.pool?.go_nogo ?? "--";
                             const isGo = rec.includes("推荐") || rec.toLowerCase() === "go";
@@ -1815,8 +1859,8 @@ export default function DashboardPage() {
               {/* AI Comparison Summary */}
               <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-5 border border-[#e5e7eb]/50">
                 <h4 className="text-sm font-semibold text-[#111827] mb-3 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#8b5cf6]"></span>
-                  AI 对比摘要
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#0ea5e9]"></span>
+                  {t('AI 对比摘要', 'AI Comparison Summary')}
                 </h4>
                 <p className="text-sm text-[#374151] leading-relaxed">
                   {generateComparisonSummary()}
@@ -1864,7 +1908,7 @@ function SortHeader({
 }) {
   const active = current === key;
   return (
-    <th onClick={() => onClick(key)} className={active ? "text-[#6366f1]" : ""}>
+    <th onClick={() => onClick(key)} className={active ? "text-[#0ea5e9]" : ""}>
       <div className="flex items-center gap-1">
         {label}
         {active && (
@@ -1888,7 +1932,7 @@ function ScoreCell({ value }: { value?: number }) {
   let color = "#10b981";
   if (value < 40) color = "#ef4444";
   else if (value < 60) color = "#f59e0b";
-  else if (value < 75) color = "#6366f1";
+  else if (value < 75) color = "#0ea5e9";
 
   return (
     <div className="flex items-center gap-2">
@@ -1905,7 +1949,7 @@ function ScoreCell({ value }: { value?: number }) {
 // ---------------------------------------------------------------------------
 function getStateFillColor(info: StateInfo | undefined): string {
   if (!info) return "#e5e7eb";
-  if (info.generating) return "#c7d2fe";
+  if (info.generating) return "#bae6fd";
   if (!info.report) return "#e5e7eb";
   // Use 4-level rating system
   const rating = info.pool?.rating ?? "";
@@ -2001,11 +2045,11 @@ function SvgMapView({
                 </div>
               )}
               <div className="text-sm mb-1.5">{getRecommendationLabel(tooltipInfo)}</div>
-              <div className="text-xs text-[#6366f1] font-medium">点击查看报告 →</div>
+              <div className="text-xs text-[#0ea5e9] font-medium">点击查看报告 →</div>
             </>
           ) : tooltipInfo.generating ? (
-            <div className="flex items-center gap-1.5 text-sm text-[#6366f1]">
-              <div className="w-3 h-3 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center gap-1.5 text-sm text-[#0ea5e9]">
+              <div className="w-3 h-3 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
               报告生成中...
             </div>
           ) : (

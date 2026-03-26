@@ -15,6 +15,7 @@ interface TopStatesCardsProps {
     overall_score?: number;
   }>;
   onStateClick: (code: string) => void;
+  lang?: 'cn' | 'en';
 }
 
 const ratingBarColor: Record<string, string> = {
@@ -29,6 +30,13 @@ const ratingBadgeClass: Record<string, string> = {
   "推荐": "bg-emerald-50 text-emerald-600",
   "谨慎": "bg-orange-100 text-orange-700",
   "不推荐": "bg-red-100 text-red-700",
+};
+
+const ratingEnMap: Record<string, string> = {
+  '强烈推荐': 'Strong Buy',
+  '推荐': 'Buy',
+  '谨慎': 'Hold',
+  '不推荐': 'Avoid',
 };
 
 function getBarColor(label: string): string {
@@ -48,11 +56,15 @@ function getScore(state: TopStatesCardsProps["states"][number]): number {
 export default function TopStatesCards({
   states,
   onStateClick,
+  lang = 'cn',
 }: TopStatesCardsProps) {
+  const t = (cn: string, en: string) => lang === 'cn' ? cn : en;
+  const displayRating = (label: string) => lang === 'en' ? (ratingEnMap[label] || label) : label;
+
   return (
     <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
-      <h3 className="text-lg font-bold text-zinc-900 mb-1">Top 10 推荐州</h3>
-      <p className="text-sm text-zinc-500 mb-5">按综合评分排名，点击查看详情</p>
+      <h3 className="text-lg font-bold text-zinc-900 mb-1">{t('Top 10 推荐州', 'Top 10 Recommended States')}</h3>
+      <p className="text-sm text-zinc-500 mb-5">{t('按综合评分排名，点击查看详情', 'Ranked by overall score. Click for details.')}</p>
 
       <div className="space-y-3">
         {states.map((state) => {
@@ -95,7 +107,7 @@ export default function TopStatesCards({
 
               {/* Rating badge */}
               <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badgeCls}`}>
-                {state.rating_emoji} {state.rating_label}
+                {state.rating_emoji} {displayRating(state.rating_label)}
               </span>
             </button>
           );

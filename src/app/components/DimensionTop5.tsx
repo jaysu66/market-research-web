@@ -11,12 +11,14 @@ interface DimensionTop5Props {
     growth: number;
     competition: number;
   }>;
+  lang?: 'cn' | 'en';
 }
 
 interface DimensionConfig {
   title: string;
+  titleEn: string;
   key: keyof DimensionTop5Props["states"][number];
-  format: (v: number) => string;
+  format: (v: number, lang: string) => string;
   borderColor: string;
   titleColor: string;
 }
@@ -24,6 +26,7 @@ interface DimensionConfig {
 const dimensions: DimensionConfig[] = [
   {
     title: "市场规模",
+    titleEn: "Market Size",
     key: "tam",
     format: (v) => `$${v.toFixed(1)}B`,
     borderColor: "border-l-blue-500",
@@ -31,6 +34,7 @@ const dimensions: DimensionConfig[] = [
   },
   {
     title: "消费能力",
+    titleEn: "Income",
     key: "income",
     format: (v) => `$${(v / 1000).toFixed(0)}K`,
     borderColor: "border-l-emerald-500",
@@ -38,28 +42,35 @@ const dimensions: DimensionConfig[] = [
   },
   {
     title: "增长潜力",
+    titleEn: "Growth",
     key: "growth",
-    format: (v) => `${v.toFixed(0)}分`,
+    format: (v, lang) => `${v.toFixed(0)}${lang === 'cn' ? '分' : 'pts'}`,
     borderColor: "border-l-amber-500",
     titleColor: "text-amber-700",
   },
   {
     title: "竞争友好度",
+    titleEn: "Competition",
     key: "competition",
-    format: (v) => `${v.toFixed(0)}分`,
-    borderColor: "border-l-violet-500",
-    titleColor: "text-violet-700",
+    format: (v, lang) => `${v.toFixed(0)}${lang === 'cn' ? '分' : 'pts'}`,
+    borderColor: "border-l-sky-500",
+    titleColor: "text-sky-700",
   },
 ];
 
 const medals = ["🥇", "🥈", "🥉", "4th", "5th"];
 
-export default function DimensionTop5({ states }: DimensionTop5Props) {
+export default function DimensionTop5({ states, lang = 'cn' }: DimensionTop5Props) {
+  const t = (cn: string, en: string) => lang === 'cn' ? cn : en;
+
   return (
     <div>
-      <h3 className="text-lg font-bold text-zinc-900 mb-1">各维度 Top 5 对比</h3>
+      <h3 className="text-lg font-bold text-zinc-900 mb-1">{t('各维度 Top 5 对比', 'Dimension Top 5')}</h3>
       <p className="text-sm text-zinc-500 mb-5">
-        从市场规模、消费能力、增长潜力、竞争友好度四个维度分别排名
+        {t(
+          '从市场规模、消费能力、增长潜力、竞争友好度四个维度分别排名',
+          'Ranked across market size, income, growth potential, and competition'
+        )}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {dimensions.map((dim) => {
@@ -76,7 +87,7 @@ export default function DimensionTop5({ states }: DimensionTop5Props) {
               className={`bg-white border border-zinc-200 rounded-xl shadow-sm border-l-4 ${dim.borderColor} p-4`}
             >
               <h4 className={`text-sm font-semibold ${dim.titleColor} mb-3`}>
-                {dim.title}
+                {lang === 'cn' ? dim.title : dim.titleEn}
               </h4>
               <ul className="space-y-2">
                 {sorted.map((state, idx) => (
@@ -102,7 +113,7 @@ export default function DimensionTop5({ states }: DimensionTop5Props) {
                       </span>
                     </div>
                     <span className="text-sm text-zinc-900 font-bold">
-                      {dim.format(state[dim.key] as number)}
+                      {dim.format(state[dim.key] as number, lang)}
                     </span>
                   </li>
                 ))}

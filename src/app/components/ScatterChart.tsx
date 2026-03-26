@@ -11,18 +11,29 @@ interface ScatterChartProps {
     income: number;
     rating: string;
   }>;
+  lang?: 'cn' | 'en';
 }
 
-const ratingLabelMap: Record<string, string> = {
+const ratingLabelMapCn: Record<string, string> = {
   strongly_recommended: "\u{1F7E2} 强烈推荐",
   recommended: "\u{1F7E1} 推荐",
   cautious: "\u{1F7E0} 谨慎",
   not_recommended: "\u{1F534} 不推荐",
-  // Chinese fallbacks
   "强烈推荐": "\u{1F7E2} 强烈推荐",
   "推荐": "\u{1F7E1} 推荐",
   "一般": "\u{1F7E0} 谨慎",
   "不推荐": "\u{1F534} 不推荐",
+};
+
+const ratingLabelMapEn: Record<string, string> = {
+  strongly_recommended: "\u{1F7E2} Strong Buy",
+  recommended: "\u{1F7E1} Buy",
+  cautious: "\u{1F7E0} Hold",
+  not_recommended: "\u{1F534} Avoid",
+  "强烈推荐": "\u{1F7E2} Strong Buy",
+  "推荐": "\u{1F7E1} Buy",
+  "一般": "\u{1F7E0} Hold",
+  "不推荐": "\u{1F534} Avoid",
 };
 
 const ratingColor: Record<string, string> = {
@@ -30,12 +41,10 @@ const ratingColor: Record<string, string> = {
   recommended: "#eab308",
   cautious: "#f97316",
   not_recommended: "#ef4444",
-  // Chinese fallbacks
   "强烈推荐": "#22c55e",
   "推荐": "#eab308",
   "一般": "#f97316",
   "不推荐": "#ef4444",
-  // Letter fallbacks
   "A": "#22c55e",
   "B": "#eab308",
   "C": "#f97316",
@@ -43,11 +52,7 @@ const ratingColor: Record<string, string> = {
 };
 
 function getColor(rating: string): string {
-  return ratingColor[rating] ?? "#6366f1";
-}
-
-function getLabel(rating: string): string {
-  return ratingLabelMap[rating] ?? rating;
+  return ratingColor[rating] ?? "#0ea5e9";
 }
 
 declare global {
@@ -65,9 +70,15 @@ interface EChartsInstance {
   dispose: () => void;
 }
 
-export default function ScatterChart({ states }: ScatterChartProps) {
+export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
   const [ready, setReady] = useState(false);
+
+  const t = (cn: string, en: string) => lang === 'cn' ? cn : en;
+  const getLabel = (rating: string): string => {
+    const map = lang === 'en' ? ratingLabelMapEn : ratingLabelMapCn;
+    return map[rating] ?? rating;
+  };
 
   // Load ECharts CDN
   useEffect(() => {
@@ -134,9 +145,12 @@ export default function ScatterChart({ states }: ScatterChartProps) {
       },
     }));
 
+    const sweetSpotLabel = t("\u{1F3AF} 甜蜜区", "\u{1F3AF} Sweet Spot");
+    const sweetSpotSub = t("高TAM + 低密度", "High TAM + Low Density");
+
     // Sweet spot annotation
     series.push({
-      name: "\u{1F3AF} 甜蜜区",
+      name: sweetSpotLabel,
       type: "scatter" as const,
       symbolSize: () => 0,
       data: [],
@@ -147,8 +161,11 @@ export default function ScatterChart({ states }: ScatterChartProps) {
     chart.setOption({
       backgroundColor: "transparent",
       title: {
-        text: "大市场 \u00D7 低竞争 散点图",
-        subtext: "X轴=TAM市场规模，Y轴=竞争密度（越低越好），气泡大小=综合评分",
+        text: t("大市场 \u00D7 低竞争 散点图", "Large Market \u00D7 Low Competition"),
+        subtext: t(
+          "X轴=TAM市场规模，Y轴=竞争密度（越低越好），气泡大小=综合评分",
+          "X=TAM, Y=Competition Density (lower=better), Bubble size=Overall score"
+        ),
         left: "center",
         textStyle: { color: "#1e293b", fontSize: 16, fontWeight: "bold" },
         subtextStyle: { color: "#64748b", fontSize: 12 },
@@ -157,7 +174,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
         trigger: "item",
         formatter: (p: { data: [number, number, number, string, string, number] }) => {
           const d = p.data;
-          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>竞争密度: ${d[1].toFixed(1)} 店/万人<br/>收入中位数: $${d[5].toLocaleString()}`;
+          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>${t('竞争密度', 'Density')}: ${d[1].toFixed(1)} ${t('店/万人', 'stores/10K')}<br/>${t('收入中位数', 'Median Income')}: $${d[5].toLocaleString()}`;
         },
         backgroundColor: "#ffffff",
         borderColor: "#e2e8f0",
@@ -174,7 +191,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
         bottom: 60,
       },
       xAxis: {
-        name: "TAM 市场规模 ($B)",
+        name: t("TAM 市场规模 ($B)", "TAM Market Size ($B)"),
         nameTextStyle: { color: "#64748b" },
         type: "value",
         axisLabel: { color: "#64748b", formatter: "${value}B" },
@@ -182,7 +199,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
         splitLine: { lineStyle: { color: "#f1f5f9" } },
       },
       yAxis: {
-        name: "竞争密度 (店/万人)",
+        name: t("竞争密度 (店/万人)", "Density (stores/10K)"),
         nameTextStyle: { color: "#64748b" },
         type: "value",
         inverse: true,
@@ -214,7 +231,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
           left: "72%",
           bottom: "12%",
           style: {
-            text: "\u{1F3AF} 甜蜜区\n高TAM + 低密度",
+            text: `${sweetSpotLabel}\n${sweetSpotSub}`,
             fill: "#22c55e",
             fontSize: 12,
             fontWeight: "bold",
@@ -243,7 +260,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
                 label: {
                   show: true,
                   position: "inside",
-                  formatter: "\u{1F3AF} 甜蜜区",
+                  formatter: sweetSpotLabel,
                   color: "#22c55e",
                   fontSize: 13,
                   fontWeight: "bold",
@@ -260,7 +277,8 @@ export default function ScatterChart({ states }: ScatterChartProps) {
       window.removeEventListener("resize", handleResize);
       chart.dispose();
     };
-  }, [ready, states]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, states, lang]);
 
   return (
     <div ref={chartRef} style={{ width: "100%", height: 500 }} />

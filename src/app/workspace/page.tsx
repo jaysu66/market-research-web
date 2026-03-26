@@ -454,7 +454,7 @@ export default function WorkspacePage() {
                   onClick={() => setCategory(cat.key)}
                   className={`px-4 py-2 text-sm rounded-lg border transition-all ${
                     category === cat.key
-                      ? "bg-[#eef2ff] border-[#6366f1] text-[#6366f1] font-medium"
+                      ? "bg-[#f0f9ff] border-[#0ea5e9] text-[#0ea5e9] font-medium"
                       : "bg-white border-[#e5e7eb] text-[#6b7280] hover:border-[#d1d5db]"
                   }`}
                 >
@@ -481,7 +481,7 @@ export default function WorkspacePage() {
                   onClick={() => toggle(code)}
                   className={`flex flex-col items-center py-2 px-1 rounded-lg border text-center transition-all text-xs ${
                     isSelected
-                      ? "bg-[#eef2ff] border-[#6366f1] text-[#6366f1]"
+                      ? "bg-[#f0f9ff] border-[#0ea5e9] text-[#0ea5e9]"
                       : "bg-white border-[#e5e7eb] text-[#6b7280] hover:border-[#d1d5db]"
                   }`}
                 >
@@ -542,7 +542,7 @@ export default function WorkspacePage() {
                 className="progress-bar-fill"
                 style={{
                   width: `${totalInQueue > 0 ? (completedInQueue / totalInQueue) * 100 : 0}%`,
-                  background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                  background: "linear-gradient(90deg, #0ea5e9, #0c4a6e)",
                 }}
               />
             </div>
@@ -591,7 +591,7 @@ export default function WorkspacePage() {
                             </svg>
                           </div>
                         ) : (
-                          <div className="w-6 h-6 border-2 border-[#6366f1] border-t-transparent rounded-full animate-spin" />
+                          <div className="w-6 h-6 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
                         )}
                       </div>
 
@@ -607,7 +607,7 @@ export default function WorkspacePage() {
                           )}
                         </div>
                         {task.status === "running" && task.step && (
-                          <p className="text-xs text-[#6366f1] mt-0.5 font-medium">{task.step}</p>
+                          <p className="text-xs text-[#0ea5e9] mt-0.5 font-medium">{task.step}</p>
                         )}
                         {task.status === "expired" && (
                           <p className="text-xs text-[#f59e0b] mt-0.5">{task.step || "任务已失效"}</p>
@@ -626,7 +626,7 @@ export default function WorkspacePage() {
                                 className="progress-bar-fill"
                                 style={{
                                   width: `${task.progress}%`,
-                                  background: "linear-gradient(90deg, #6366f1, #8b5cf6)",
+                                  background: "linear-gradient(90deg, #0ea5e9, #0c4a6e)",
                                 }}
                               />
                             </div>
@@ -664,7 +664,7 @@ export default function WorkspacePage() {
                                     st === "done"
                                       ? "bg-[#ecfdf5] border-[#d1fae5] text-[#10b981]"
                                       : st === "active"
-                                      ? "bg-[#eef2ff] border-[#c7d2fe] text-[#6366f1]"
+                                      ? "bg-[#f0f9ff] border-[#bae6fd] text-[#0ea5e9]"
                                       : "bg-[#f9fafb] border-[#e5e7eb] text-[#d1d5db]"
                                   }`}
                                 >
@@ -696,7 +696,7 @@ export default function WorkspacePage() {
                                 s.status === "done"
                                   ? "text-[#10b981]"
                                   : s.status === "active"
-                                  ? "text-[#6366f1] font-medium"
+                                  ? "text-[#0ea5e9] font-medium"
                                   : "text-[#d1d5db]"
                               }`}
                             >
@@ -738,7 +738,7 @@ export default function WorkspacePage() {
                 <div className="flex items-center gap-3">
                   <div
                     className="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm"
-                    style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+                    style={{ background: "linear-gradient(135deg, #0ea5e9, #0c4a6e)" }}
                   >
                     {cat.label.charAt(0)}
                   </div>
@@ -794,7 +794,7 @@ export default function WorkspacePage() {
           {/* Add new category */}
           <button
             className="mt-4 w-full py-3 rounded-lg border-2 border-dashed border-[#d1d5db] text-sm text-[#9ca3af]
-                       hover:border-[#6366f1] hover:text-[#6366f1] hover:bg-[#eef2ff] transition-all cursor-pointer"
+                       hover:border-[#0ea5e9] hover:text-[#0ea5e9] hover:bg-[#f0f9ff] transition-all cursor-pointer"
             onClick={() => setShowAddModal(true)}
           >
             + 添加新品类
@@ -813,7 +813,7 @@ export default function WorkspacePage() {
                   onKeyDown={(e) => e.key === "Enter" && addCategory()}
                   placeholder="例如：地毯、壁纸、灯具..."
                   className="w-full px-4 py-2.5 rounded-lg border border-[#d1d5db] text-sm text-[#111827]
-                             placeholder-[#9ca3af] focus:border-[#6366f1] focus:ring-2 focus:ring-[#6366f1]/20 outline-none transition-all"
+                             placeholder-[#9ca3af] focus:border-[#0ea5e9] focus:ring-2 focus:ring-[#0ea5e9]/20 outline-none transition-all"
                   autoFocus
                 />
                 <div className="flex justify-end gap-2 mt-4">
