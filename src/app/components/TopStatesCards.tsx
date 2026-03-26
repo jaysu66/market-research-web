@@ -12,19 +12,37 @@ interface TopStatesCardsProps {
     recommended_city: string;
     tam: number;
     competition_density: number;
+    overall_score?: number;
   }>;
   onStateClick: (code: string) => void;
 }
 
-const ratingBadgeColor: Record<string, string> = {
-  "强烈推荐": "bg-green-100 text-green-700 border-green-300",
-  "推荐": "bg-yellow-100 text-yellow-700 border-yellow-300",
-  "谨慎": "bg-orange-100 text-orange-700 border-orange-300",
-  "不推荐": "bg-red-100 text-red-700 border-red-300",
+const ratingBarColor: Record<string, string> = {
+  "强烈推荐": "#16a34a",
+  "推荐": "#4ade80",
+  "谨慎": "#f97316",
+  "不推荐": "#dc2626",
 };
 
+const ratingBadgeClass: Record<string, string> = {
+  "强烈推荐": "bg-green-100 text-green-700",
+  "推荐": "bg-emerald-50 text-emerald-600",
+  "谨慎": "bg-orange-100 text-orange-700",
+  "不推荐": "bg-red-100 text-red-700",
+};
+
+function getBarColor(label: string): string {
+  return ratingBarColor[label] ?? "#9ca3af";
+}
+
 function getBadgeClass(label: string): string {
-  return ratingBadgeColor[label] ?? "bg-gray-100 text-gray-600 border-gray-300";
+  return ratingBadgeClass[label] ?? "bg-gray-100 text-gray-600";
+}
+
+function getScore(state: TopStatesCardsProps["states"][number]): number {
+  if (state.overall_score != null && state.overall_score > 0) return state.overall_score;
+  // Fallback: derive from rank
+  return Math.max(10, Math.min(100, 95 - (state.rank - 1) * 5));
 }
 
 export default function TopStatesCards({
@@ -32,82 +50,57 @@ export default function TopStatesCards({
   onStateClick,
 }: TopStatesCardsProps) {
   return (
-    <div className="space-y-3">
-      <h3 className="text-lg font-bold text-gray-900 mb-1">Top 10 推荐州</h3>
-      <p className="text-sm text-gray-500 mb-2">
-        点击卡片查看详细信息
-      </p>
-      {states.map((state) => (
-        <button
-          key={state.code}
-          onClick={() => onStateClick(state.code)}
-          className="w-full text-left bg-white hover:shadow-lg border border-gray-200 hover:border-gray-300 rounded-xl p-4 transition-all duration-200 hover:-translate-y-0.5 group"
-        >
-          <div className="flex items-start gap-3">
-            {/* Rank number */}
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center">
-              <span className="text-sm font-bold text-white">
-                {state.rank}
+    <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+      <h3 className="text-lg font-bold text-zinc-900 mb-1">Top 10 推荐州</h3>
+      <p className="text-sm text-zinc-500 mb-5">按综合评分排名，点击查看详情</p>
+
+      <div className="space-y-3">
+        {states.map((state) => {
+          const score = getScore(state);
+          const barColor = getBarColor(state.rating_label);
+          const badgeCls = getBadgeClass(state.rating_label);
+
+          return (
+            <button
+              key={state.code}
+              onClick={() => onStateClick(state.code)}
+              className="w-full flex items-center gap-3 px-3 py-2 hover:bg-zinc-50 rounded-lg transition-colors cursor-pointer"
+            >
+              {/* Rank */}
+              <span className="text-zinc-400 font-mono text-sm w-6 text-right flex-shrink-0">
+                #{state.rank}
               </span>
-            </div>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-gray-900 font-bold text-sm group-hover:text-indigo-600 transition-colors">
-                  {state.rating_emoji} {state.name}
-                </span>
-                <span className="font-mono text-xs text-gray-400">
-                  {state.code}
-                </span>
-                <span
-                  className={`text-xs px-2 py-0.5 rounded-full border ${getBadgeClass(
-                    state.rating_label
-                  )}`}
-                >
-                  {state.rating_label}
-                </span>
-              </div>
+              {/* State code + name */}
+              <span className="text-zinc-900 font-medium text-sm w-28 text-left flex-shrink-0 truncate">
+                <span className="font-mono text-zinc-400 mr-1">{state.code}</span>
+                {state.name}
+              </span>
 
-              <div className="text-xs text-gray-500 mb-2">
-                📍 推荐城市: {state.recommended_city}
-              </div>
-
-              <div className="flex gap-4 text-xs">
-                <div>
-                  <span className="text-gray-400">TAM </span>
-                  <span className="text-indigo-600 font-bold">
-                    ${state.tam.toFixed(1)}B
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-400">竞争密度 </span>
-                  <span className="text-indigo-600 font-bold">
-                    {state.competition_density.toFixed(1)} 店/万人
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Arrow */}
-            <div className="flex-shrink-0 text-gray-300 group-hover:text-indigo-500 transition-colors mt-1">
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
+              {/* Progress bar */}
+              <div className="flex-1 h-3 bg-zinc-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${score}%`,
+                    backgroundColor: barColor,
+                  }}
                 />
-              </svg>
-            </div>
-          </div>
-        </button>
-      ))}
+              </div>
+
+              {/* Score */}
+              <span className="text-zinc-900 font-bold font-mono text-sm w-8 text-right flex-shrink-0">
+                {score}
+              </span>
+
+              {/* Rating badge */}
+              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${badgeCls}`}>
+                {state.rating_emoji} {state.rating_label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

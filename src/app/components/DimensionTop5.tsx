@@ -17,8 +17,8 @@ interface DimensionConfig {
   title: string;
   key: keyof DimensionTop5Props["states"][number];
   format: (v: number) => string;
-  color: string;
-  bgColor: string;
+  borderColor: string;
+  titleColor: string;
 }
 
 const dimensions: DimensionConfig[] = [
@@ -26,29 +26,29 @@ const dimensions: DimensionConfig[] = [
     title: "市场规模",
     key: "tam",
     format: (v) => `$${v.toFixed(1)}B`,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50 border-blue-100",
+    borderColor: "border-l-blue-500",
+    titleColor: "text-blue-700",
   },
   {
     title: "消费能力",
     key: "income",
     format: (v) => `$${(v / 1000).toFixed(0)}K`,
-    color: "text-emerald-600",
-    bgColor: "bg-emerald-50 border-emerald-100",
+    borderColor: "border-l-emerald-500",
+    titleColor: "text-emerald-700",
   },
   {
     title: "增长潜力",
     key: "growth",
     format: (v) => `${v.toFixed(0)}分`,
-    color: "text-amber-600",
-    bgColor: "bg-amber-50 border-amber-100",
+    borderColor: "border-l-amber-500",
+    titleColor: "text-amber-700",
   },
   {
     title: "竞争友好度",
     key: "competition",
     format: (v) => `${v.toFixed(0)}分`,
-    color: "text-purple-600",
-    bgColor: "bg-purple-50 border-purple-100",
+    borderColor: "border-l-violet-500",
+    titleColor: "text-violet-700",
   },
 ];
 
@@ -56,7 +56,7 @@ const medals = ["🥇", "🥈", "🥉", "4th", "5th"];
 
 export default function DimensionTop5({ states }: DimensionTop5Props) {
   return (
-    <div className="bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm">
+    <div>
       <h3 className="text-lg font-bold text-zinc-900 mb-1">各维度 Top 5 对比</h3>
       <p className="text-sm text-zinc-500 mb-5">
         从市场规模、消费能力、增长潜力、竞争友好度四个维度分别排名
@@ -73,9 +73,9 @@ export default function DimensionTop5({ states }: DimensionTop5Props) {
           return (
             <div
               key={dim.key}
-              className={`rounded-xl border ${dim.bgColor} p-4`}
+              className={`bg-white border border-zinc-200 rounded-xl shadow-sm border-l-4 ${dim.borderColor} p-4`}
             >
-              <h4 className={`text-sm font-semibold ${dim.color} mb-3`}>
+              <h4 className={`text-sm font-semibold ${dim.titleColor} mb-3`}>
                 {dim.title}
               </h4>
               <ul className="space-y-2">
@@ -94,16 +94,14 @@ export default function DimensionTop5({ states }: DimensionTop5Props) {
                           </span>
                         )}
                       </span>
-                      <span className="text-sm text-zinc-700">
+                      <span className="text-sm text-zinc-600">
                         <span className="font-mono text-zinc-400 mr-1">
                           {state.code}
                         </span>
                         {state.name}
                       </span>
                     </div>
-                    <span
-                      className={`text-sm font-semibold ${dim.color}`}
-                    >
+                    <span className="text-sm text-zinc-900 font-bold">
                       {dim.format(state[dim.key] as number)}
                     </span>
                   </li>

@@ -28,6 +28,22 @@ const US_STATES: Record<string, string> = {
   WI: "Wisconsin", WY: "Wyoming",
 };
 
+const US_STATES_CN: Record<string, string> = {
+  AL: "阿拉巴马州", AK: "阿拉斯加州", AZ: "亚利桑那州", AR: "阿肯色州",
+  CA: "加利福尼亚州", CO: "科罗拉多州", CT: "康涅狄格州", DE: "特拉华州",
+  FL: "佛罗里达州", GA: "佐治亚州", HI: "夏威夷州", ID: "爱达荷州",
+  IL: "伊利诺伊州", IN: "印第安纳州", IA: "艾奥瓦州", KS: "堪萨斯州",
+  KY: "肯塔基州", LA: "路易斯安那州", ME: "缅因州", MD: "马里兰州",
+  MA: "马萨诸塞州", MI: "密歇根州", MN: "明尼苏达州", MS: "密西西比州",
+  MO: "密苏里州", MT: "蒙大拿州", NE: "内布拉斯加州", NV: "内华达州",
+  NH: "新罕布什尔州", NJ: "新泽西州", NM: "新墨西哥州", NY: "纽约州",
+  NC: "北卡罗来纳州", ND: "北达科他州", OH: "俄亥俄州", OK: "俄克拉荷马州",
+  OR: "俄勒冈州", PA: "宾夕法尼亚州", RI: "罗得岛州", SC: "南卡罗来纳州",
+  SD: "南达科他州", TN: "田纳西州", TX: "德克萨斯州", UT: "犹他州",
+  VT: "佛蒙特州", VA: "弗吉尼亚州", WA: "华盛顿州", WV: "西弗吉尼亚州",
+  WI: "威斯康星州", WY: "怀俄明州",
+};
+
 const STATE_CODES = Object.keys(US_STATES);
 
 // US Tile Map positions: [col, row] 1-indexed for CSS grid (12 cols x 8 rows)
@@ -1239,7 +1255,7 @@ export default function DashboardPage() {
                                   backgroundColor: bgColor,
                                 }}
                                 onClick={(e) => handleCardClick(code, e)}
-                                title={`${US_STATES[code]} ${score ? `(${score}分)` : hasReport ? "(已调研)" : "(未调研)"}`}
+                                title={`${US_STATES_CN[code]} (${code}) ${score ? `${score}分` : hasReport ? "已调研" : "未调研"}`}
                               >
                                 <span className={`text-[10px] font-bold ${hasReport ? "text-white" : "text-[#9ca3af]"}`}>
                                   {code}
@@ -1279,47 +1295,23 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                {/* Top 10 推荐州 — 5列网格（Manus风格） */}
+                {/* Top 10 推荐州 — 水平柱状图 */}
                 {researchedStates.length > 0 && (
                   <section className="fade-in">
-                    <h2 className="text-xl font-bold text-zinc-900 mb-2">Top 10 推荐州</h2>
-                    <p className="text-sm text-zinc-500 mb-4">按综合评分（市场规模+消费能力+增长潜力+竞争友好+运营成本）排名</p>
-                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                      {sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => {
-                        const ratingColors: Record<string, string> = {
-                          '强烈推荐': 'bg-emerald-50 text-emerald-700',
-                          '推荐': 'bg-yellow-50 text-yellow-700',
-                          '谨慎': 'bg-orange-50 text-orange-700',
-                          '不推荐': 'bg-red-50 text-red-700',
-                        };
-                        const label = s.pool?.rating_label ?? '未评级';
-                        const colorCls = ratingColors[label] ?? 'bg-gray-50 text-gray-700';
-                        return (
-                          <div
-                            key={s.code}
-                            onClick={() => handleStateClick(s.code)}
-                            className="bg-white border border-zinc-200 rounded-xl p-4 hover:-translate-y-1 hover:shadow-lg transition-all duration-200 cursor-pointer"
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <span className="text-2xl font-black text-zinc-100" style={{ fontFamily: "'JetBrains Mono', monospace" }}>#{i + 1}</span>
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${colorCls}`}>
-                                {s.pool?.rating_emoji} {label}
-                              </span>
-                            </div>
-                            <div className="font-bold text-sm mb-0.5">{s.name}</div>
-                            <div className="text-xs text-zinc-400 mb-2">{s.pool?.recommended_city || s.code}</div>
-                            <div className="flex items-center justify-between text-xs">
-                              <span className="text-zinc-400">TAM</span>
-                              <span className="font-mono font-semibold text-blue-600">${(s.pool?.tam ?? 0).toFixed(1)}B</span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs mt-1">
-                              <span className="text-zinc-400">竞争密度</span>
-                              <span className="font-mono">{(s.pool?.competition_density ?? 0).toFixed(2)}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
+                    <TopStatesCards
+                      states={sortedStates.filter(s => s.report).slice(0, 10).map((s, i) => ({
+                        rank: i + 1,
+                        code: s.code,
+                        name: s.name,
+                        rating_label: s.pool?.rating_label ?? '未评级',
+                        rating_emoji: s.pool?.rating_emoji ?? '',
+                        recommended_city: s.pool?.recommended_city ?? '',
+                        tam: s.pool?.tam ?? 0,
+                        competition_density: s.pool?.competition_density ?? 0,
+                        overall_score: s.pool?.overall_score ?? 0,
+                      }))}
+                      onStateClick={handleStateClick}
+                    />
                   </section>
                 )}
             </div>
@@ -1462,8 +1454,7 @@ export default function DashboardPage() {
                   style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)', position: 'fixed', zIndex: 9999 }}
                 >
                   <div className="flex items-center gap-2 mb-3">
-                    <span className="text-base font-bold">{confirmState}</span>
-                    <span className="text-sm text-[#6b7280]">{US_STATES[confirmState]}</span>
+                    <span className="text-base font-bold">{US_STATES_CN[confirmState]} ({confirmState})</span>
                   </div>
                   <p className="text-sm text-[#6b7280] mb-4">
                     确认为该州生成 <strong className="text-[#111827]">{catList.find(c => c.key === category)?.label}</strong> 市场调研报告？
@@ -1619,8 +1610,8 @@ export default function DashboardPage() {
                               <td className="text-[#9ca3af] font-medium">{i + 1}</td>
                               <td>
                                 <div className="flex items-center gap-2">
-                                  <span className="font-bold text-[#111827]">{s.code}</span>
-                                  <span className="text-[#6b7280] text-xs">{s.name}</span>
+                                  <span className="font-mono text-zinc-400 text-xs">{s.code}</span>
+                                  <span className="font-bold text-[#111827]">{US_STATES_CN[s.code] || s.name}</span>
                                 </div>
                               </td>
                               <td>
