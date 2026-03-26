@@ -751,6 +751,26 @@ export default function DashboardPage() {
     }
   };
 
+  // Batch generate all un-researched states
+  const [batchConfirm, setBatchConfirm] = useState(false);
+  const [batchRunning, setBatchRunning] = useState(false);
+
+  const unresearchedCodes = STATE_CODES.filter(
+    (code) => !states[code]?.report && !states[code]?.generating
+  );
+
+  const startBatchAll = async () => {
+    setBatchConfirm(false);
+    setBatchRunning(true);
+    // Generate one at a time with 2s delay to avoid overwhelming the API
+    for (const code of unresearchedCodes) {
+      await startGeneration(code);
+      // Small delay between requests
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    setBatchRunning(false);
+  };
+
   // Handle state card click
   const handleCardClick = (code: string, e: React.MouseEvent) => {
     const info = states[code];
@@ -1101,6 +1121,30 @@ export default function DashboardPage() {
                 <span className="hidden sm:inline">&middot;</span>
                 <span><strong className="text-white">{stronglyRecommendedCount}</strong> 个强烈推荐州</span>
               </div>
+              {/* Batch generate button */}
+              {unresearchedCodes.length > 0 && (
+                <div className="mt-5">
+                  {batchRunning ? (
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg text-sm text-zinc-300">
+                      <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                      正在批量生成中...（{generatingCount} 个州在队列中）
+                    </div>
+                  ) : batchConfirm ? (
+                    <div className="inline-flex items-center gap-3 px-4 py-2 bg-white/10 rounded-lg text-sm">
+                      <span className="text-zinc-300">确认生成剩余 <strong className="text-white">{unresearchedCodes.length}</strong> 个州？预计耗时 {Math.ceil(unresearchedCodes.length * 20)} 分钟</span>
+                      <button onClick={startBatchAll} className="px-3 py-1 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-500 transition-colors">确认开始</button>
+                      <button onClick={() => setBatchConfirm(false)} className="px-3 py-1 bg-white/10 text-zinc-400 rounded-md text-xs hover:bg-white/20 transition-colors">取消</button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setBatchConfirm(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600/20 border border-blue-500/30 text-blue-400 rounded-lg text-sm font-medium hover:bg-blue-600/30 transition-colors"
+                    >
+                      🚀 一键生成剩余 {unresearchedCodes.length} 个州
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </header>
 
