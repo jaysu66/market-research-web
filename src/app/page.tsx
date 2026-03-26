@@ -249,6 +249,7 @@ function computeScores(raw: RawDataPool): DataPoolState {
       rating_label: rl,
       rating_emoji: re,
       competition_density: cd,
+      median_income: stData?.median_income ?? 0,
     };
   }
 
@@ -2024,39 +2025,59 @@ function SvgMapView({
         })}
       </svg>
 
-      {/* Tooltip */}
-      {tooltip && tooltipInfo && (
-        <div
-          className="map-tooltip"
-          style={{
-            left: Math.min(tooltip.x - 90, window.innerWidth - 200),
-            top: Math.max(tooltip.y - 100, 10),
-          }}
-        >
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-bold text-[#111827] text-base">{US_STATES[tooltip.code]}</span>
-            <span className="text-xs text-[#9ca3af]">({tooltip.code})</span>
-          </div>
-          {tooltipInfo.report ? (
-            <>
-              {tooltipInfo.pool?.overall_score !== undefined && (
-                <div className="text-sm text-[#6b7280] mb-1">
-                  综合评分: <span className="font-semibold text-[#111827]">{tooltipInfo.pool.overall_score}</span>
-                </div>
-              )}
-              <div className="text-sm mb-1.5">{getRecommendationLabel(tooltipInfo)}</div>
-              <div className="text-xs text-[#0ea5e9] font-medium">点击查看报告 →</div>
-            </>
-          ) : tooltipInfo.generating ? (
-            <div className="flex items-center gap-1.5 text-sm text-[#0ea5e9]">
-              <div className="w-3 h-3 border-2 border-[#0ea5e9] border-t-transparent rounded-full animate-spin" />
-              报告生成中...
+      {/* Tooltip - Manus style dark card */}
+      {tooltip && tooltipInfo && (() => {
+        const info = tooltipInfo;
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              left: tooltip.x + 16,
+              top: tooltip.y - 10,
+              zIndex: 9999,
+              background: 'rgba(15, 23, 42, 0.95)',
+              color: 'white',
+              borderRadius: '12px',
+              padding: '14px 18px',
+              fontSize: '13px',
+              lineHeight: '1.8',
+              boxShadow: '0 8px 30px rgba(0,0,0,0.3)',
+              pointerEvents: 'none' as const,
+              minWidth: '200px',
+            }}
+          >
+            <div style={{ fontSize: '15px', fontWeight: 700, marginBottom: '8px' }}>
+              {US_STATES_CN[tooltip.code]} ({tooltip.code})
             </div>
-          ) : (
-            <div className="text-sm text-[#9ca3af]">点击生成报告</div>
-          )}
-        </div>
-      )}
+            <div>评级：{info?.pool?.rating_emoji} {info?.pool?.rating_label || '未调研'}</div>
+            {info?.pool?.store_count !== undefined && (
+              <div>竞争商家：{info.pool.store_count} 家</div>
+            )}
+            {info?.pool?.competition_density !== undefined && (
+              <div>竞争密度：{info.pool.competition_density.toFixed(2)} 店/万人</div>
+            )}
+            {info?.pool?.median_income !== undefined && info.pool.median_income > 0 && (
+              <div>收入中位数：${info.pool.median_income.toLocaleString()}</div>
+            )}
+            <div>TAM：${info?.pool?.tam?.toFixed(1) || '?'}B</div>
+            {info?.report && (
+              <div style={{ marginTop: '6px', color: '#38bdf8', fontSize: '12px' }}>
+                点击查看报告 →
+              </div>
+            )}
+            {!info?.report && info?.generating && (
+              <div style={{ marginTop: '6px', color: '#38bdf8', fontSize: '12px' }}>
+                报告生成中...
+              </div>
+            )}
+            {!info?.report && !info?.generating && (
+              <div style={{ marginTop: '6px', color: '#94a3b8', fontSize: '12px' }}>
+                点击生成报告
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
