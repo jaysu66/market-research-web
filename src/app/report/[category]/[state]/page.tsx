@@ -24,6 +24,22 @@ const US_STATES: Record<string, string> = {
 
 const CATEGORY_LABELS: Record<string, string> = {
   curtains: "窗帘/窗饰",
+  carpet: "地毯",
+  wallpaper: "墙纸/壁纸",
+  lighting: "灯具",
+  furniture: "家具",
+  flooring: "地板",
+};
+
+// Map Chinese category keys (from old localStorage) to English keys used in Supabase
+const CATEGORY_KEY_MAP: Record<string, string> = {
+  "窗帘": "curtains", "窗帘/窗饰": "curtains",
+  "地毯": "carpet",
+  "墙纸": "wallpaper", "壁纸": "wallpaper",
+  "灯具": "lighting",
+  "家具": "furniture",
+  "地板": "flooring",
+  "瓷砖": "tiles",
 };
 
 // ---------------------------------------------------------------------------
@@ -53,10 +69,13 @@ export default async function ReportPage({
 }: {
   params: Promise<{ category: string; state: string }>;
 }) {
-  const { category, state } = await params;
+  const { category: rawCategory, state } = await params;
   const stateCode = state.toUpperCase();
   const stateName = US_STATES[stateCode];
-  const categoryLabel = CATEGORY_LABELS[category] || category;
+  // Normalize category key: decode URL-encoded Chinese and map to English key
+  const decodedCategory = decodeURIComponent(rawCategory);
+  const category = CATEGORY_KEY_MAP[decodedCategory] || decodedCategory;
+  const categoryLabel = CATEGORY_LABELS[category] || decodedCategory;
 
   if (!stateName) notFound();
 

@@ -197,7 +197,16 @@ export default function WorkspacePage() {
   // Add new category
   const addCategory = () => {
     if (!newCatLabel.trim()) return;
-    const key = newCatLabel.trim().toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, "_");
+    // Key must be ASCII-only to work as URL path and match backend product names
+    // Chinese input like "地毯" needs manual English key - prompt user or use pinyin
+    const raw = newCatLabel.trim().toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+    // If key is empty (all Chinese), use a common mapping
+    const CHINESE_TO_KEY: Record<string, string> = {
+      "地毯": "carpet", "窗帘": "curtains", "墙纸": "wallpaper", "壁纸": "wallpaper",
+      "灯具": "lighting", "家具": "furniture", "瓷砖": "tiles", "地板": "flooring",
+      "卫浴": "bathroom", "厨具": "kitchen", "油漆": "paint", "五金": "hardware",
+    };
+    const key = raw || CHINESE_TO_KEY[newCatLabel.trim()] || `cat_${Date.now()}`;
     if (catList.some((c) => c.key === key)) return;
     const updated = [...catList, { key, label: newCatLabel.trim() }];
     setCatList(updated);

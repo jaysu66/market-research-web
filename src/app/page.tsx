@@ -47,11 +47,35 @@ const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
 ];
 
+// Map Chinese category keys to English (auto-fix for old localStorage data)
+const CATEGORY_KEY_FIX: Record<string, string> = {
+  "地毯": "carpet", "窗帘": "curtains", "窗帘_窗饰": "curtains",
+  "墙纸": "wallpaper", "壁纸": "wallpaper", "灯具": "lighting",
+  "家具": "furniture", "地板": "flooring", "瓷砖": "tiles",
+};
+
 function loadCategories(): { key: string; label: string }[] {
   if (typeof window === "undefined") return DEFAULT_CATEGORIES;
   try {
     const saved = localStorage.getItem("market_categories");
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      let cats: { key: string; label: string }[] = JSON.parse(saved);
+      // Auto-fix: map Chinese keys to English
+      cats = cats.map(c => {
+        const fixed = CATEGORY_KEY_FIX[c.key];
+        return fixed ? { key: fixed, label: c.label } : c;
+      });
+      // Deduplicate by key
+      const seen = new Set<string>();
+      cats = cats.filter(c => {
+        if (seen.has(c.key)) return false;
+        seen.add(c.key);
+        return true;
+      });
+      // Save fixed version back
+      localStorage.setItem("market_categories", JSON.stringify(cats));
+      return cats;
+    }
   } catch { /* ignore */ }
   return DEFAULT_CATEGORIES;
 }
