@@ -167,8 +167,7 @@ export default async function ReportPage({
                 <a
                   key={d.label}
                   href={d.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download
                   className="inline-flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb] hover:border-[#6366f1] hover:text-[#6366f1] transition-all"
                 >
                   {d.icon === "doc" ? (
