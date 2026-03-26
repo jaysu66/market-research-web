@@ -66,7 +66,7 @@ export default async function ReportPage({
 
   try {
     const indexUrl = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/${category}/index.json`;
-    const res = await fetch(indexUrl, { next: { revalidate: 30 } });
+    const res = await fetch(indexUrl, { cache: "no-store" });
     if (res.ok) {
       const raw = await res.json();
       // Support both old flat format and new versioned format
