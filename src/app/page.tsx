@@ -45,6 +45,7 @@ const US_MAP_POSITIONS: Record<string, [number, number]> = {
 
 const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
+  { key: "carpet", label: "地毯" },
 ];
 
 // Map Chinese category keys to English (auto-fix for old localStorage data)
@@ -58,24 +59,33 @@ function loadCategories(): { key: string; label: string }[] {
   if (typeof window === "undefined") return DEFAULT_CATEGORIES;
   try {
     const saved = localStorage.getItem("market_categories");
+    // Merge DEFAULT + localStorage, deduplicate by key (DEFAULT wins on label)
+    const merged = [...DEFAULT_CATEGORIES];
     if (saved) {
-      let cats: { key: string; label: string }[] = JSON.parse(saved);
-      // Auto-fix: map Chinese keys to English
-      cats = cats.map(c => {
+      let extra: { key: string; label: string }[] = JSON.parse(saved);
+      // Auto-fix Chinese keys
+      extra = extra.map(c => {
         const fixed = CATEGORY_KEY_FIX[c.key];
         return fixed ? { key: fixed, label: c.label } : c;
       });
-      // Deduplicate by key
-      const seen = new Set<string>();
-      cats = cats.filter(c => {
-        if (seen.has(c.key)) return false;
-        seen.add(c.key);
-        return true;
-      });
-      // Save fixed version back
-      localStorage.setItem("market_categories", JSON.stringify(cats));
-      return cats;
+      // Add non-default entries
+      const defaultKeys = new Set(DEFAULT_CATEGORIES.map(c => c.key));
+      for (const c of extra) {
+        if (!defaultKeys.has(c.key)) {
+          merged.push(c);
+        }
+      }
     }
+    // Deduplicate by key (safety net)
+    const seen = new Set<string>();
+    const result = merged.filter(c => {
+      if (seen.has(c.key)) return false;
+      seen.add(c.key);
+      return true;
+    });
+    // Save clean version
+    localStorage.setItem("market_categories", JSON.stringify(result));
+    return result;
   } catch { /* ignore */ }
   return DEFAULT_CATEGORIES;
 }
