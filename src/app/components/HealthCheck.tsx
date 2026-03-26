@@ -84,14 +84,17 @@ export default function HealthCheck({ sources }: HealthCheckProps) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
 
-        const res = await fetch(source.url, {
-          method: "GET",
-          mode: "cors",
-          signal: controller.signal,
-        }).catch(() => null);
+        try {
+          const res = await fetch(source.url, {
+            method: "GET",
+            mode: "cors",
+            signal: controller.signal,
+          }).catch(() => null);
 
-        clearTimeout(timeout);
-        online = res !== null && res.ok;
+          online = res !== null && res.ok;
+        } finally {
+          clearTimeout(timeout);
+        }
       } catch {
         online = false;
       }

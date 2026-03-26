@@ -329,67 +329,68 @@ export default function WorkspacePage() {
     }
 
     const poll = async () => {
-      setQueue((prev) => {
-        const running = prev.filter((t) => t.status === "running" && t.taskId);
-        if (running.length === 0) return prev;
+      // Read current queue snapshot outside setState to avoid nested setState calls
+      let snapshot: QueueTask[] = [];
+      setQueue((prev) => { snapshot = prev; return prev; });
 
-        for (const t of running) {
-          // Check for timeout (30 minutes)
-          if (Date.now() - t.startedAt > TASK_TIMEOUT_MS) {
+      const running = snapshot.filter((t) => t.status === "running" && t.taskId);
+      if (running.length === 0) return;
+
+      for (const t of running) {
+        // Check for timeout (30 minutes)
+        if (Date.now() - t.startedAt > TASK_TIMEOUT_MS) {
+          setQueue((cur) =>
+            cur.map((item) =>
+              item.stateCode === t.stateCode
+                ? { ...item, status: "timeout" as const, step: "任务超时（超过30分钟）" }
+                : item
+            )
+          );
+          continue;
+        }
+
+        fetch(`${API}/status/${t.taskId}`)
+          .then((res) => {
+            if (res.status === 404) {
+              // Handle 404: increment counter, expire if threshold reached
+              setQueue((cur) =>
+                cur.map((item) => {
+                  if (item.stateCode !== t.stateCode) return item;
+                  const newCount = item.notFoundCount + 1;
+                  if (newCount >= MAX_404_COUNT) {
+                    return {
+                      ...item,
+                      status: "expired" as const,
+                      step: "任务已失效（服务端无此任务）",
+                      notFoundCount: newCount,
+                    };
+                  }
+                  return { ...item, notFoundCount: newCount };
+                })
+              );
+              return null;
+            }
+            if (!res.ok) return null;
+            return res.json();
+          })
+          .then((data) => {
+            if (!data) return;
             setQueue((cur) =>
               cur.map((item) =>
                 item.stateCode === t.stateCode
-                  ? { ...item, status: "timeout" as const, step: "任务超时（超过30分钟）" }
+                  ? {
+                      ...item,
+                      progress: data.progress ?? 0,
+                      step: data.step ?? "",
+                      status: data.status === "completed" ? "completed" : data.status === "error" ? "error" : "running",
+                      notFoundCount: 0, // reset on successful response
+                    }
                   : item
               )
             );
-            continue;
-          }
-
-          fetch(`${API}/status/${t.taskId}`)
-            .then((res) => {
-              if (res.status === 404) {
-                // Handle 404: increment counter, expire if threshold reached
-                setQueue((cur) =>
-                  cur.map((item) => {
-                    if (item.stateCode !== t.stateCode) return item;
-                    const newCount = item.notFoundCount + 1;
-                    if (newCount >= MAX_404_COUNT) {
-                      return {
-                        ...item,
-                        status: "expired" as const,
-                        step: "任务已失效（服务端无此任务）",
-                        notFoundCount: newCount,
-                      };
-                    }
-                    return { ...item, notFoundCount: newCount };
-                  })
-                );
-                return null;
-              }
-              if (!res.ok) return null;
-              return res.json();
-            })
-            .then((data) => {
-              if (!data) return;
-              setQueue((cur) =>
-                cur.map((item) =>
-                  item.stateCode === t.stateCode
-                    ? {
-                        ...item,
-                        progress: data.progress ?? 0,
-                        step: data.step ?? "",
-                        status: data.status === "completed" ? "completed" : data.status === "error" ? "error" : "running",
-                        notFoundCount: 0, // reset on successful response
-                      }
-                    : item
-                )
-              );
-            })
-            .catch(() => { /* ignore network errors */ });
-        }
-        return prev;
-      });
+          })
+          .catch(() => { /* ignore network errors */ });
+      }
     };
 
     intervalRef.current = setInterval(poll, 3000);

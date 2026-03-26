@@ -164,43 +164,44 @@ export default function TaskQueue({
 
   // Poll running tasks
   const pollRunning = useCallback(async () => {
-    setTasks((prev) => {
-      const running = prev.filter(
-        (t) => t.status === "running" || t.status === "pending"
-      );
-      if (running.length === 0) return prev;
+    // Read current tasks snapshot without side effects in setState
+    let snapshot: TaskRecord[] = [];
+    setTasks((prev) => { snapshot = prev; return prev; });
 
-      for (const t of running) {
-        fetch(`${apiBase}/status/${t.task_id}`)
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (!data) return;
-            setTasks((cur) =>
-              cur.map((item) =>
-                item.task_id === t.task_id
-                  ? {
-                      ...item,
-                      progress: data.progress ?? item.progress ?? 0,
-                      step: data.step ?? item.step,
-                      status:
-                        data.status === "completed"
-                          ? "completed"
-                          : data.status === "error"
-                          ? "error"
-                          : data.status === "timeout"
-                          ? "timeout"
-                          : item.status,
-                    }
-                  : item
-              )
-            );
-          })
-          .catch(() => {
-            /* network error — leave status unchanged */
-          });
-      }
-      return prev;
-    });
+    const running = snapshot.filter(
+      (t) => t.status === "running" || t.status === "pending"
+    );
+    if (running.length === 0) return;
+
+    for (const t of running) {
+      fetch(`${apiBase}/status/${t.task_id}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!data) return;
+          setTasks((cur) =>
+            cur.map((item) =>
+              item.task_id === t.task_id
+                ? {
+                    ...item,
+                    progress: data.progress ?? item.progress ?? 0,
+                    step: data.step ?? item.step,
+                    status:
+                      data.status === "completed"
+                        ? "completed"
+                        : data.status === "error"
+                        ? "error"
+                        : data.status === "timeout"
+                        ? "timeout"
+                        : item.status,
+                  }
+                : item
+            )
+          );
+        })
+        .catch(() => {
+          /* network error — leave status unchanged */
+        });
+    }
   }, [apiBase]);
 
   useEffect(() => {

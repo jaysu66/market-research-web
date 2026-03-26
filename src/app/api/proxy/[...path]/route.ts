@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
     const data = await resp.json();
     return NextResponse.json(data, { status: resp.status });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Backend unreachable' }, { status: 502 });
   }
 }
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   const targetPath = path.join('/');
-  const url = `${API_BASE}/${targetPath}`;
+  const url = `${API_BASE}/${targetPath}${request.nextUrl.search}`;
   const body = await request.json();
 
   try {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
     const data = await resp.json();
     return NextResponse.json(data, { status: resp.status });
-  } catch (e) {
+  } catch {
     return NextResponse.json({ error: 'Backend unreachable' }, { status: 502 });
   }
 }

@@ -431,7 +431,7 @@ export default function DashboardPage() {
   const [states, setStates] = useState<Record<string, StateInfo>>({});
   const [loading, setLoading] = useState(true);
   const [confirmState, setConfirmState] = useState<string | null>(null);
-  const [confirmPos, setConfirmPos] = useState({ x: 0, y: 0 });
+  // confirmPos removed — popup uses fixed centering via CSS transform
   const [sortKey, setSortKey] = useState<SortKey>("overall");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [mapView, setMapView] = useState<"tile" | "svg">("svg");
@@ -475,7 +475,7 @@ export default function DashboardPage() {
     const els = document.querySelectorAll('.fade-in');
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  });
+  }, [loading, category]);
 
   // Initialize state map
   useEffect(() => {
@@ -533,15 +533,25 @@ export default function DashboardPage() {
         for (const r of reports) {
           const code = r.state_code;
           if (next[code]) {
-            next[code] = {
-              ...next[code],
-              report: r,
-              pool: poolMap[code] ?? null,
-              generating: false,
-              taskId: null,
-              progress: 0,
-              step: "",
-            };
+            // Don't override generating state — let polling handle completion
+            if (next[code].generating) {
+              next[code] = {
+                ...next[code],
+                report: r,
+                pool: poolMap[code] ?? null,
+                // Keep generating/taskId/progress/step intact
+              };
+            } else {
+              next[code] = {
+                ...next[code],
+                report: r,
+                pool: poolMap[code] ?? null,
+                generating: false,
+                taskId: null,
+                progress: 0,
+                step: "",
+              };
+            }
           }
         }
         return next;
@@ -558,11 +568,25 @@ export default function DashboardPage() {
   }, [category, fetchReports]);
 
   // Restore generating tasks from localStorage
+  // Also auto-add missing categories if tasks exist for unlisted categories
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
       const entries = Object.entries(saved) as [string, { taskId: string; category: string }][];
       if (entries.length > 0) {
+        // Auto-add category if it's not in catList (e.g., carpet added from workspace)
+        const taskCategories = new Set(entries.map(([, t]) => t.category));
+        const currentKeys = new Set(catList.map(c => c.key));
+        for (const tc of taskCategories) {
+          if (!currentKeys.has(tc)) {
+            setCatList(prev => {
+              const updated = [...prev, { key: tc, label: tc }];
+              try { localStorage.setItem("market_categories", JSON.stringify(updated)); } catch {}
+              return updated;
+            });
+          }
+        }
+
         setStates(prev => {
           const next = { ...prev };
           for (const [code, { taskId, category: cat }] of entries) {
@@ -575,19 +599,29 @@ export default function DashboardPage() {
         });
       }
     } catch { /* ignore */ }
-  }, [category]);
+  }, [category, catList]);
 
   // Polling for generating tasks
+  const categoryRef = useRef(category);
+  categoryRef.current = category;
+  const fetchReportsRef = useRef(fetchReports);
+  fetchReportsRef.current = fetchReports;
+
   useEffect(() => {
     const poll = async () => {
       const codes = Array.from(pollingRef.current);
       if (codes.length === 0) return;
 
       for (const code of codes) {
-        const st = states[code];
-        if (!st?.taskId) continue;
+        // Read taskId from current state via functional updater pattern
+        let taskId: string | null = null;
+        setStates((prev) => {
+          taskId = prev[code]?.taskId ?? null;
+          return prev; // no mutation
+        });
+        if (!taskId) continue;
         try {
-          const res = await fetch(`${API}/status/${st.taskId}`);
+          const res = await fetch(`${API}/status/${taskId}`);
           if (res.ok) {
             const data = await res.json();
             if (data.status === "completed" || data.status === "error") {
@@ -600,7 +634,7 @@ export default function DashboardPage() {
               } catch { /* ignore */ }
               if (data.status === "completed") {
                 // Refresh all reports
-                setTimeout(() => fetchReports(category), 1000);
+                setTimeout(() => fetchReportsRef.current(categoryRef.current), 1000);
               }
               setStates((prev) => ({
                 ...prev,
@@ -630,7 +664,7 @@ export default function DashboardPage() {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [states, category, fetchReports]);
+  }, []); // stable — reads state through refs and functional updaters
 
   // Start generation for a state
   const startGeneration = async (code: string) => {
@@ -685,12 +719,7 @@ export default function DashboardPage() {
 
     if (info.generating) return;
 
-    // Show confirm popup near click position
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setConfirmPos({
-      x: Math.min(rect.left, window.innerWidth - 300),
-      y: rect.bottom + 8,
-    });
+    // Show confirm popup (centered via CSS)
     setConfirmState(code);
   };
 
@@ -827,13 +856,14 @@ export default function DashboardPage() {
     };
 
     chart.setOption(option);
-    // Handle resize
+    // Handle resize — attach listener, will be cleaned up when chart is disposed
     const handleResize = () => chart.resize();
     window.addEventListener("resize", handleResize);
-    // Cleanup on next render
-    setTimeout(() => {
+    // Store cleanup function for later disposal
+    (radarChartRef.current as HTMLElement & { _cleanupResize?: () => void })._cleanupResize?.();
+    (radarChartRef.current as HTMLElement & { _cleanupResize?: () => void })._cleanupResize = () => {
       window.removeEventListener("resize", handleResize);
-    }, 60000);
+    };
   };
 
   // Re-render radar chart when panel opens or selection changes
@@ -905,16 +935,10 @@ export default function DashboardPage() {
   // Stats
   const researchedCount = STATE_CODES.filter((c) => states[c]?.report).length;
   const generatingCount = STATE_CODES.filter((c) => states[c]?.generating).length;
-  const recommendCount = researchedStates.filter(
-    (s) => s.pool?.recommendation?.includes("推荐") || s.pool?.go_nogo?.toLowerCase() === "go"
-  ).length;
-
-  const lastUpdate = researchedStates.length > 0
-    ? researchedStates.reduce((latest, s) => {
-        const d = s.report?.created_at;
-        return d && d > latest ? d : latest;
-      }, "")
-    : "";
+  // recommendCount and lastUpdate available if needed in future
+  // const recommendCount = researchedStates.filter(
+  //   (s) => s.pool?.recommendation?.includes("推荐") || s.pool?.go_nogo?.toLowerCase() === "go"
+  // ).length;
 
   // Aggregate values for Hero
   const totalStores = researchedStates.reduce((sum, s) => sum + (s.pool?.store_count ?? 0), 0);
@@ -936,8 +960,7 @@ export default function DashboardPage() {
       return;
     }
     if (info.generating) return;
-    // For USMap clicks without a position, use center screen
-    setConfirmPos({ x: window.innerWidth / 2 - 150, y: window.innerHeight / 2 });
+    // Show confirm popup (centered via CSS)
     setConfirmState(code);
   };
 
@@ -1375,7 +1398,7 @@ export default function DashboardPage() {
                 tam: s.pool?.tam ?? 0,
                 income: s.pool?.median_income ?? 0,
                 growth: s.pool?.growth_potential_score ?? 0,
-                competition: 100 - (s.pool?.competition_score ?? 50),
+                competition: s.pool?.competition_score ?? 50,
               }))} />
             )}
 
@@ -1521,8 +1544,8 @@ export default function DashboardPage() {
                               <td><ScoreCell value={p?.operating_cost_score} /></td>
                               <td><ScoreCell value={p?.growth_potential_score} /></td>
                               <td className="text-sm text-[#374151] font-mono">{p?.store_count ?? '--'}</td>
-                              <td className="text-sm text-[#374151] font-mono">{p?.competition_density?.toFixed(2) ?? '--'}</td>
-                              <td className="text-sm text-[#374151] font-mono">${p?.tam?.toFixed(2) ?? '--'}</td>
+                              <td className="text-sm text-[#374151] font-mono">{p?.competition_density != null ? p.competition_density.toFixed(2) : '--'}</td>
+                              <td className="text-sm text-[#374151] font-mono">${p?.tam != null ? p.tam.toFixed(2) : '--'}</td>
                               <td className="text-sm text-[#374151] font-mono">{p?.payback_months ?? '--'}</td>
                               <td className="text-sm text-[#6b7280] max-w-[120px] truncate">{p?.recommended_city || '--'}</td>
                             </tr>
@@ -1742,16 +1765,6 @@ export default function DashboardPage() {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
-
-function SummaryCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
-  return (
-    <div className="bg-white/70 backdrop-blur-sm rounded-xl p-4 text-center">
-      <p className="text-xs text-[#6b7280] mb-1">{label}</p>
-      <p className="text-2xl font-bold" style={{ color }}>{value}</p>
-      <p className="text-xs text-[#9ca3af]">{sub}</p>
-    </div>
-  );
-}
 
 function SortHeader({
   label,

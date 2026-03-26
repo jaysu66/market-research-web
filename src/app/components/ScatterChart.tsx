@@ -157,7 +157,7 @@ export default function ScatterChart({ states }: ScatterChartProps) {
         trigger: "item",
         formatter: (p: { data: [number, number, number, string, string, number] }) => {
           const d = p.data;
-          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>竞争密度: ${d[1].toFixed(1)} 店/万人<br/>综合评分: ${d[5].toFixed(0)}`;
+          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>竞争密度: ${d[1].toFixed(1)} 店/万人<br/>收入中位数: $${d[5].toLocaleString()}`;
         },
         backgroundColor: "#ffffff",
         borderColor: "#e2e8f0",
