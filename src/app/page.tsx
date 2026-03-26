@@ -646,18 +646,28 @@ export default function DashboardPage() {
         if (!taskId) continue;
         try {
           const res = await fetch(`${API}/status/${taskId}`);
-          if (res.ok) {
+          if (res.status === 404) {
+            // Task not found (server restarted) — clean up
+            pollingRef.current.delete(code);
+            try {
+              const tasks = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
+              delete tasks[code];
+              localStorage.setItem('generating_tasks', JSON.stringify(tasks));
+            } catch { /* ignore */ }
+            setStates((prev) => ({
+              ...prev,
+              [code]: { ...prev[code], generating: false, progress: 0, step: "" },
+            }));
+          } else if (res.ok) {
             const data = await res.json();
             if (data.status === "completed" || data.status === "error") {
               pollingRef.current.delete(code);
-              // Remove from localStorage
               try {
                 const tasks = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
                 delete tasks[code];
                 localStorage.setItem('generating_tasks', JSON.stringify(tasks));
               } catch { /* ignore */ }
               if (data.status === "completed") {
-                // Refresh all reports
                 setTimeout(() => fetchReportsRef.current(categoryRef.current), 1000);
               }
               setStates((prev) => ({
