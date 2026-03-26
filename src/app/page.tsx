@@ -45,6 +45,7 @@ const US_MAP_POSITIONS: Record<string, [number, number]> = {
 
 const DEFAULT_CATEGORIES = [
   { key: "curtains", label: "窗帘/窗饰" },
+  { key: "carpet", label: "地毯" },
 ];
 
 // Map Chinese category keys to English (auto-fix for old localStorage data)
