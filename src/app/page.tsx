@@ -676,7 +676,7 @@ export default function DashboardPage() {
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
-      const entries = Object.entries(saved) as [string, { taskId: string; category: string }][];
+      const entries = Object.entries(saved) as [string, { taskId: string; category: string; step?: string; progress?: number }][];
       if (entries.length > 0) {
         // Auto-add category if it's not in catList (e.g., carpet added from workspace)
         const taskCategories = new Set(entries.map(([, t]) => t.category));
@@ -693,9 +693,9 @@ export default function DashboardPage() {
 
         setStates(prev => {
           const next = { ...prev };
-          for (const [code, { taskId, category: cat }] of entries) {
+          for (const [code, { taskId, category: cat, step: savedStep, progress: savedProgress }] of entries) {
             if (cat === category && next[code]) {
-              next[code] = { ...next[code], generating: true, taskId, progress: 0, step: 'collecting' };
+              next[code] = { ...next[code], generating: true, taskId, progress: savedProgress ?? 0, step: savedStep ?? 'collecting' };
               pollingRef.current.add(code);
             }
           }
@@ -760,6 +760,7 @@ export default function DashboardPage() {
                 },
               }));
             } else {
+              // Update state
               setStates((prev) => ({
                 ...prev,
                 [code]: {
@@ -768,6 +769,15 @@ export default function DashboardPage() {
                   step: data.step ?? "",
                 },
               }));
+              // Persist latest step/progress to localStorage so refresh doesn't lose it
+              try {
+                const tasks = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
+                if (tasks[code]) {
+                  tasks[code].step = data.step ?? "";
+                  tasks[code].progress = data.progress ?? 0;
+                  localStorage.setItem('generating_tasks', JSON.stringify(tasks));
+                }
+              } catch { /* ignore */ }
             }
           }
         } catch { /* ignore */ }
