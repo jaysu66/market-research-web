@@ -104,6 +104,8 @@ interface EChartsInstance {
 
 export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
+  const chartInstanceRef = useRef<EChartsInstance | null>(null);
+  const hasAnimatedRef = useRef(false);
   const [ready, setReady] = useState(false);
 
   const t = (cn: string, en: string) => lang === 'cn' ? cn : en;
@@ -149,10 +151,13 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
     if (!ready || !chartRef.current || !window.echarts) return;
 
     const echarts = window.echarts;
-    const existingInstance = echarts.getInstanceByDom(chartRef.current);
-    if (existingInstance) existingInstance.dispose();
-
-    const chart = echarts.init(chartRef.current);
+    // Reuse existing instance to avoid re-animation
+    let chart = chartInstanceRef.current;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if (!chart || (chart as any)?._disposed) {
+      chart = echarts.init(chartRef.current);
+      chartInstanceRef.current = chart;
+    }
 
     // Normalize income for bubble size
     const incomes = states.map((s) => s.income);
@@ -176,6 +181,15 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
     // If all densities are 0, set a reasonable y-axis range
     const yMax = maxDensity === 0 ? 1 : undefined;
 
+    // Collect all points sorted by density to assign alternating label positions
+    const allPoints = states.map(s => ({ code: s.code, density: s.density, tam: s.tam }));
+    allPoints.sort((a, b) => a.density - b.density || a.tam - b.tam);
+    const labelPositions: Record<string, string> = {};
+    const positions = ['top', 'right', 'left', 'bottom'];
+    allPoints.forEach((p, i) => {
+      labelPositions[p.code] = positions[i % positions.length];
+    });
+
     const series = Object.entries(groups).map(([rating, data]) => ({
       name: getLabel(rating),
       type: "scatter",
@@ -189,8 +203,10 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
           const fullName = p.data[4];
           return getStateName(code, fullName);
         },
-        position: "top",
-        distance: 8,
+        position: (p: { data: [number, number, number, string, string, number] }) => {
+          return labelPositions[p.data[3]] || 'top';
+        },
+        distance: 10,
         fontSize: 11,
         fontWeight: 500,
         color: "#334155",
@@ -210,11 +226,13 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       label: { show: false, formatter: () => "", position: "top", fontSize: 10, color: "transparent" },
     } as typeof series[number]);
 
+    const isFirstRender = !hasAnimatedRef.current;
+    hasAnimatedRef.current = true;
+
     chart.setOption({
-      animation: true,
-      animationDuration: 800,
+      animation: isFirstRender,
+      animationDuration: isFirstRender ? 600 : 0,
       animationEasing: 'cubicOut',
-      animationDurationUpdate: 0,  // 更新时不重复动画
       backgroundColor: "transparent",
       title: {
         text: t("大市场 \u00D7 低竞争 散点图", "Large Market \u00D7 Low Competition"),
@@ -336,7 +354,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
     window.addEventListener("resize", handleResize);
     return () => {
       window.removeEventListener("resize", handleResize);
-      chart.dispose();
+      // Don't dispose here — we reuse the instance. Dispose on unmount only.
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, states, lang]);
