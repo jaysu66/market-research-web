@@ -226,18 +226,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       },
     }));
 
-    const sweetSpotLabel = t("\u{1F3AF} 甜蜜区", "\u{1F3AF} Sweet Spot");
-    const sweetSpotSub = t("高TAM + 低密度", "High TAM + Low Density");
-
-    // Sweet spot annotation
-    series.push({
-      name: sweetSpotLabel,
-      type: "scatter" as const,
-      symbolSize: () => 0,
-      data: [],
-      itemStyle: { color: "transparent", opacity: 0 },
-      label: { show: false, formatter: () => "", position: "top", distance: 8, fontSize: 10, fontWeight: 500, color: "transparent" },
-    } as typeof series[number]);
+    // Sweet spot hint moved below chart as text annotation
 
     const isFirstRender = !hasAnimatedRef.current;
     hasAnimatedRef.current = true;
@@ -301,67 +290,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
         moveOverlap: 'shiftY',
         dy: 2,
       },
-      graphic: [
-        {
-          type: "rect",
-          shape: {
-            x: 0,
-            y: 0,
-            width: 120,
-            height: 60,
-          },
-          left: "70%",
-          bottom: "10%",
-          style: {
-            fill: "rgba(22,101,52,0.06)",
-            stroke: "#22c55e",
-            lineWidth: 1,
-            lineDash: [4, 4],
-          },
-        },
-        {
-          type: "text",
-          left: "72%",
-          bottom: "12%",
-          style: {
-            text: `${sweetSpotLabel}\n${sweetSpotSub}`,
-            fill: "#22c55e",
-            fontSize: 12,
-            fontWeight: "bold",
-          },
-        },
-      ],
-      // Mark area for sweet spot
-      series: series.map((s, i) =>
-        i === 0
-          ? {
-              ...s,
-              markArea: {
-                silent: true,
-                itemStyle: {
-                  color: "rgba(34,197,94,0.06)",
-                  borderColor: "#22c55e",
-                  borderWidth: 1,
-                  borderType: "dashed",
-                },
-                data: [
-                  [
-                    { xAxis: maxTam * 0.6, yAxis: minDensity },
-                    { xAxis: maxTam * 1.1, yAxis: minDensity + (maxDensity - minDensity) * 0.35 || 0.35 },
-                  ],
-                ],
-                label: {
-                  show: true,
-                  position: "inside",
-                  formatter: sweetSpotLabel,
-                  color: "#22c55e",
-                  fontSize: 13,
-                  fontWeight: "bold",
-                },
-              },
-            }
-          : s
-      ),
+      series,
     });
 
     const handleResize = () => chart.resize();
@@ -374,6 +303,13 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
   }, [ready, states, lang]);
 
   return (
-    <div ref={chartRef} style={{ width: "100%", height: 560 }} />
+    <div>
+      <div ref={chartRef} style={{ width: "100%", height: 560 }} />
+      <p className="text-xs text-zinc-400 text-center mt-1">
+        {lang === 'cn'
+          ? '💡 右上区域（高TAM + 低竞争密度）为最佳投资区间'
+          : '💡 Top-right area (high TAM + low density) indicates the best investment zone'}
+      </p>
+    </div>
   );
 }
