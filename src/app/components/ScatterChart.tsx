@@ -69,18 +69,18 @@ const ratingLabelMapEn: Record<string, string> = {
 };
 
 const ratingColor: Record<string, string> = {
-  strongly_recommended: "#22c55e",
-  recommended: "#eab308",
-  cautious: "#f97316",
-  not_recommended: "#ef4444",
-  "强烈推荐": "#22c55e",
-  "推荐": "#eab308",
-  "一般": "#f97316",
-  "不推荐": "#ef4444",
-  "A": "#22c55e",
-  "B": "#eab308",
-  "C": "#f97316",
-  "D": "#ef4444",
+  strongly_recommended: "#166534",  // 深绿
+  recommended: "#a16207",           // 深琥珀
+  cautious: "#c2410c",              // 深橙
+  not_recommended: "#991b1b",       // 深红
+  "强烈推荐": "#166534",
+  "推荐": "#a16207",
+  "一般": "#c2410c",
+  "不推荐": "#991b1b",
+  "A": "#166534",
+  "B": "#a16207",
+  "C": "#c2410c",
+  "D": "#991b1b",
 };
 
 function getColor(rating: string): string {
@@ -181,7 +181,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       type: "scatter",
       symbolSize: (val: number[]) => val[2],
       data,
-      itemStyle: { color: getColor(rating), opacity: 0.8 },
+      itemStyle: { color: getColor(rating), opacity: 0.9 },
       label: {
         show: true,
         formatter: (p: { data: [number, number, number, string, string, number] }) => {
@@ -190,8 +190,10 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
           return getStateName(code, fullName);
         },
         position: "top",
-        fontSize: 10,
-        color: "#64748b",
+        distance: 8,
+        fontSize: 11,
+        fontWeight: 500,
+        color: "#334155",
       },
     }));
 
@@ -209,6 +211,10 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
     } as typeof series[number]);
 
     chart.setOption({
+      animation: true,
+      animationDuration: 800,
+      animationEasing: 'cubicOut',
+      animationDurationUpdate: 0,  // 更新时不重复动画
       backgroundColor: "transparent",
       title: {
         text: t("大市场 \u00D7 低竞争 散点图", "Large Market \u00D7 Low Competition"),
@@ -275,7 +281,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
           left: "70%",
           bottom: "10%",
           style: {
-            fill: "rgba(34,197,94,0.08)",
+            fill: "rgba(22,101,52,0.06)",
             stroke: "#22c55e",
             lineWidth: 1,
             lineDash: [4, 4],
