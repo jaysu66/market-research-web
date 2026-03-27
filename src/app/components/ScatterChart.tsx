@@ -190,20 +190,36 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       labelPositions[p.code] = positions[i % positions.length];
     });
 
-    // Build series - use series-level label so labelLayout can manage overlap
+    // Build series - per-point label with smart position based on quadrant
     const series = Object.entries(groups).map(([rating, data]) => ({
       name: getLabel(rating),
       type: "scatter",
       symbolSize: (val: number[]) => val[2],
-      data,
+      data: data.map(d => {
+        const tam = d[0];
+        const density = d[1];
+        // Smart label position: small TAM → right, large TAM → left, low density → bottom, else top
+        let pos = "top";
+        if (tam < maxTam * 0.3) {
+          pos = density > (maxDensity * 0.5) ? "right" : "left";
+        } else if (tam > maxTam * 0.8) {
+          pos = "bottom";
+        }
+        return {
+          value: d,
+          label: {
+            position: pos,
+          },
+        };
+      }),
       itemStyle: { color: getColor(rating), opacity: 0.85 },
       label: {
         show: true,
-        formatter: (p: { data: [number, number, number, string, string, number] }) => {
-          return getStateName(p.data[3], p.data[4]);
+        formatter: (p: { data: { value: [number, number, number, string, string, number] } | [number, number, number, string, string, number] }) => {
+          const arr = Array.isArray(p.data) ? p.data : p.data.value;
+          return getStateName(arr[3], arr[4]);
         },
-        position: "top",
-        distance: 8,
+        distance: 10,
         fontSize: 10,
         fontWeight: 500,
         color: "#475569",
@@ -283,6 +299,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       labelLayout: {
         hideOverlap: true,
         moveOverlap: 'shiftY',
+        dy: 2,
       },
       graphic: [
         {
@@ -357,6 +374,6 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
   }, [ready, states, lang]);
 
   return (
-    <div ref={chartRef} style={{ width: "100%", height: 500 }} />
+    <div ref={chartRef} style={{ width: "100%", height: 560 }} />
   );
 }
