@@ -217,12 +217,12 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
         show: true,
         formatter: (p: { data: { value: [number, number, number, string, string, number] } | [number, number, number, string, string, number] }) => {
           const arr = Array.isArray(p.data) ? p.data : p.data.value;
-          return getStateName(arr[3], arr[4]);
+          return arr[3]; // Just state code like "TX", "CA"
         },
-        distance: 10,
+        distance: 6,
         fontSize: 10,
-        fontWeight: 500,
-        color: "#475569",
+        fontWeight: 600,
+        color: "#334155",
       },
     }));
 
@@ -248,14 +248,25 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       },
       tooltip: {
         trigger: "item",
-        formatter: (p: { data: [number, number, number, string, string, number] }) => {
-          const d = p.data;
+        formatter: (p: { data: { value: [number, number, number, string, string, number] } | [number, number, number, string, string, number]; seriesName: string }) => {
+          const d = Array.isArray(p.data) ? p.data : p.data.value;
+          if (!d || !d[3]) return '';
           const stateLabel = getStateTooltipName(d[3], d[4]);
-          return `<b>${stateLabel}</b><br/>TAM: $${d[0].toFixed(1)}B<br/>${t('竞争密度', 'Density')}: ${d[1].toFixed(1)} ${t('店/万人', 'stores/10K')}<br/>${t('收入中位数', 'Median Income')}: $${d[5].toLocaleString()}`;
+          const ratingEmoji = p.seriesName.includes('\u5f3a\u70c8') || p.seriesName.includes('Strong') ? '\u{1F7E2}'
+            : p.seriesName.includes('\u63a8\u8350') || p.seriesName.includes('Buy') ? '\u{1F7E1}'
+            : p.seriesName.includes('\u8c28\u614e') || p.seriesName.includes('Hold') ? '\u{1F7E0}' : '\u{1F534}';
+          return '<div style="font-size:13px;line-height:1.8">'
+            + '<b style="font-size:14px">' + stateLabel + '</b><br/>'
+            + 'TAM: <b>$' + d[0].toFixed(2) + 'B</b><br/>'
+            + t('\u7ade\u4e89\u5bc6\u5ea6', 'Density') + ': <b>' + d[1].toFixed(2) + ' ' + t('\u5e97/\u4e07\u4eba', '/10K') + '</b><br/>'
+            + t('\u6536\u5165\u4e2d\u4f4d\u6570', 'Income') + ': <b>$' + d[5].toLocaleString() + '</b><br/>'
+            + t('\u8bc4\u7ea7', 'Rating') + ': ' + ratingEmoji + ' <b>' + p.seriesName + '</b>'
+            + '</div>';
         },
-        backgroundColor: "#ffffff",
-        borderColor: "#e2e8f0",
-        textStyle: { color: "#1e293b" },
+        backgroundColor: "#1e293b",
+        borderColor: "#334155",
+        textStyle: { color: "#f1f5f9" },
+        extraCssText: 'border-radius:8px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,0.3);',
       },
       legend: {
         top: 60,
