@@ -290,7 +290,29 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
         moveOverlap: 'shiftY',
         dy: 2,
       },
-      series,
+      series: series.map((s, i) =>
+        i === 0
+          ? {
+              ...s,
+              markArea: {
+                silent: true,
+                itemStyle: {
+                  color: "rgba(16,185,129,0.04)",
+                  borderColor: "#10b981",
+                  borderWidth: 1,
+                  borderType: "dashed",
+                },
+                data: [
+                  [
+                    { xAxis: maxTam * 0.55, yAxis: minDensity },
+                    { xAxis: maxTam * 1.1, yAxis: minDensity + (maxDensity - minDensity) * 0.3 || 0.3 },
+                  ],
+                ],
+                label: { show: false },
+              },
+            }
+          : s
+      ),
     });
 
     const handleResize = () => chart.resize();
