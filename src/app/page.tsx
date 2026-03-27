@@ -1406,7 +1406,7 @@ export default function DashboardPage() {
                       density: s.pool?.competition_density ?? 0,
                       income: s.pool?.median_income ?? 0,
                       rating: s.pool?.rating ?? 'cautious',
-                    }))} />
+                    }))} lang={lang} />
                   </div>
                 )}
 

@@ -14,6 +14,38 @@ interface ScatterChartProps {
   lang?: 'cn' | 'en';
 }
 
+const STATE_SHORT_CN: Record<string, string> = {
+  AL: "阿拉巴马", AK: "阿拉斯加", AZ: "亚利桑那", AR: "阿肯色",
+  CA: "加利福尼亚", CO: "科罗拉多", CT: "康涅狄格", DE: "特拉华",
+  FL: "佛罗里达", GA: "佐治亚", HI: "夏威夷", ID: "爱达荷",
+  IL: "伊利诺伊", IN: "印第安纳", IA: "艾奥瓦", KS: "堪萨斯",
+  KY: "肯塔基", LA: "路易斯安那", ME: "缅因", MD: "马里兰",
+  MA: "马萨诸塞", MI: "密歇根", MN: "明尼苏达", MS: "密西西比",
+  MO: "密苏里", MT: "蒙大拿", NE: "内布拉斯加", NV: "内华达",
+  NH: "新罕布什尔", NJ: "新泽西", NM: "新墨西哥", NY: "纽约",
+  NC: "北卡", ND: "北达科他", OH: "俄亥俄", OK: "俄克拉荷马",
+  OR: "俄勒冈", PA: "宾夕法尼亚", RI: "罗得岛", SC: "南卡",
+  SD: "南达科他", TN: "田纳西", TX: "德克萨斯", UT: "犹他",
+  VT: "佛蒙特", VA: "弗吉尼亚", WA: "华盛顿", WV: "西弗吉尼亚",
+  WI: "威斯康星", WY: "怀俄明",
+};
+
+const STATE_FULL_EN: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas",
+  CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware",
+  FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho",
+  IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas",
+  KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma",
+  OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah",
+  VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia",
+  WI: "Wisconsin", WY: "Wyoming",
+};
+
 const ratingLabelMapCn: Record<string, string> = {
   strongly_recommended: "\u{1F7E2} 强烈推荐",
   recommended: "\u{1F7E1} 推荐",
@@ -80,6 +112,20 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
     return map[rating] ?? rating;
   };
 
+  const getStateName = (code: string, fullName: string): string => {
+    if (lang === 'cn') {
+      return STATE_SHORT_CN[code] ?? fullName;
+    }
+    return STATE_FULL_EN[code] ?? fullName;
+  };
+
+  const getStateTooltipName = (code: string, fullName: string): string => {
+    if (lang === 'cn') {
+      return `${STATE_SHORT_CN[code] ?? fullName}州 (${code})`;
+    }
+    return `${STATE_FULL_EN[code] ?? fullName} (${code})`;
+  };
+
   // Load ECharts CDN
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -138,7 +184,11 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       itemStyle: { color: getColor(rating), opacity: 0.8 },
       label: {
         show: true,
-        formatter: (p: { data: [number, number, number, string] }) => p.data[3],
+        formatter: (p: { data: [number, number, number, string, string, number] }) => {
+          const code = p.data[3];
+          const fullName = p.data[4];
+          return getStateName(code, fullName);
+        },
         position: "top",
         fontSize: 10,
         color: "#64748b",
@@ -164,7 +214,7 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
         text: t("大市场 \u00D7 低竞争 散点图", "Large Market \u00D7 Low Competition"),
         subtext: t(
           "X轴=TAM市场规模，Y轴=竞争密度（越低越好），气泡大小=综合评分",
-          "X=TAM, Y=Competition Density (lower=better), Bubble size=Overall score"
+          "X=TAM, Y=Competition Density (lower=better), Size=Overall Score"
         ),
         left: "center",
         textStyle: { color: "#1e293b", fontSize: 16, fontWeight: "bold" },
@@ -174,7 +224,8 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
         trigger: "item",
         formatter: (p: { data: [number, number, number, string, string, number] }) => {
           const d = p.data;
-          return `<b>${d[4]} (${d[3]})</b><br/>TAM: $${d[0].toFixed(1)}B<br/>${t('竞争密度', 'Density')}: ${d[1].toFixed(1)} ${t('店/万人', 'stores/10K')}<br/>${t('收入中位数', 'Median Income')}: $${d[5].toLocaleString()}`;
+          const stateLabel = getStateTooltipName(d[3], d[4]);
+          return `<b>${stateLabel}</b><br/>TAM: $${d[0].toFixed(1)}B<br/>${t('竞争密度', 'Density')}: ${d[1].toFixed(1)} ${t('店/万人', 'stores/10K')}<br/>${t('收入中位数', 'Median Income')}: $${d[5].toLocaleString()}`;
         },
         backgroundColor: "#ffffff",
         borderColor: "#e2e8f0",
@@ -207,6 +258,10 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
         axisLabel: { color: "#64748b" },
         axisLine: { lineStyle: { color: "#cbd5e1" } },
         splitLine: { lineStyle: { color: "#f1f5f9" } },
+      },
+      labelLayout: {
+        hideOverlap: true,
+        moveOverlap: 'shiftY',
       },
       graphic: [
         {
