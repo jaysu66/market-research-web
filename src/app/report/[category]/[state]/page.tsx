@@ -66,6 +66,7 @@ const CATEGORY_KEY_MAP: Record<string, string> = {
 // ---------------------------------------------------------------------------
 interface ReportFiles {
   "report.html"?: string;
+  "report.docx"?: string;
   "report_a.docx"?: string;
   "report_b.docx"?: string;
   "data_pool.json"?: string;
@@ -143,13 +144,11 @@ export default async function ReportPage({
     htmlUrl = `/api/report-html?url=${encodeURIComponent(report.files["report.html"])}${cacheBuster}`;
   }
 
-  // Download links
+  // Download link — single combined report
   const downloads: { label: string; icon: string; url: string }[] = [];
-  if (report?.files?.["report_a.docx"]) {
-    downloads.push({ label: "数据报告", icon: "doc", url: report.files["report_a.docx"] });
-  }
-  if (report?.files?.["report_b.docx"]) {
-    downloads.push({ label: "商业分析", icon: "chart", url: report.files["report_b.docx"] });
+  const docxUrl = report?.files?.["report.docx"] || report?.files?.["report_a.docx"];
+  if (docxUrl) {
+    downloads.push({ label: "下载完整报告", icon: "doc", url: docxUrl });
   }
 
   return (
@@ -186,7 +185,7 @@ export default async function ReportPage({
                 key={d.label}
                 href={d.url}
                 download
-                className="inline-flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb] hover:border-[#0ea5e9] hover:text-[#0ea5e9] transition-all"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold py-1.5 px-4 rounded-lg border border-[#0ea5e9] bg-[#0ea5e9] text-white hover:bg-[#0c4a6e] hover:border-[#0c4a6e] transition-all shadow-sm"
               >
                 {d.icon === "doc" ? (
                   <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
