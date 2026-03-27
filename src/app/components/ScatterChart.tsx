@@ -190,27 +190,24 @@ export default function ScatterChart({ states, lang = 'cn' }: ScatterChartProps)
       labelPositions[p.code] = positions[i % positions.length];
     });
 
+    // Build series with per-point label positions to avoid overlap
     const series = Object.entries(groups).map(([rating, data]) => ({
       name: getLabel(rating),
       type: "scatter",
       symbolSize: (val: number[]) => val[2],
-      data,
+      data: data.map(d => ({
+        value: d,
+        label: {
+          show: true,
+          formatter: () => getStateName(d[3], d[4]),
+          position: labelPositions[d[3]] || 'top',
+          distance: 10,
+          fontSize: 11,
+          fontWeight: 500,
+          color: "#334155",
+        },
+      })),
       itemStyle: { color: getColor(rating), opacity: 0.9 },
-      label: {
-        show: true,
-        formatter: (p: { data: [number, number, number, string, string, number] }) => {
-          const code = p.data[3];
-          const fullName = p.data[4];
-          return getStateName(code, fullName);
-        },
-        position: (p: { data: [number, number, number, string, string, number] }) => {
-          return labelPositions[p.data[3]] || 'top';
-        },
-        distance: 10,
-        fontSize: 11,
-        fontWeight: 500,
-        color: "#334155",
-      },
     }));
 
     const sweetSpotLabel = t("\u{1F3AF} 甜蜜区", "\u{1F3AF} Sweet Spot");
