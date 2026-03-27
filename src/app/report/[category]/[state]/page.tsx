@@ -137,8 +137,10 @@ export default async function ReportPage({
   }
 
   // Get HTML URL — proxy through our API to strip restrictive CSP
+  // Add cache buster to force fresh content after regeneration
   if (report?.files?.["report.html"]) {
-    htmlUrl = `/api/report-html?url=${encodeURIComponent(report.files["report.html"])}`;
+    const cacheBuster = report.created_at ? `&t=${encodeURIComponent(report.created_at)}` : `&t=${Date.now()}`;
+    htmlUrl = `/api/report-html?url=${encodeURIComponent(report.files["report.html"])}${cacheBuster}`;
   }
 
   // Download links

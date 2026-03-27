@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const resp = await fetch(url, { next: { revalidate: 300 } });
+    const resp = await fetch(url, { cache: "no-store" });
     if (!resp.ok) {
       return NextResponse.json({ error: "Upstream error" }, { status: resp.status });
     }
@@ -29,7 +29,8 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "public, max-age=300, s-maxage=600",
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
         // No restrictive CSP — allow scripts/styles/images to load
       },
     });
