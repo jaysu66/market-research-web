@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import RegenButton from "./RegenButton";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -177,30 +178,39 @@ export default async function ReportPage({
               </span>
             </div>
           </div>
-          {downloads.length > 0 && (
-            <div className="flex gap-2">
-              {downloads.map((d) => (
-                <a
-                  key={d.label}
-                  href={d.url}
-                  download
-                  className="inline-flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb] hover:border-[#0ea5e9] hover:text-[#0ea5e9] transition-all"
-                >
-                  {d.icon === "doc" ? (
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M3 1.5h5.5L12 5v7.5a1 1 0 01-1 1H3a1 1 0 01-1-1v-11a1 1 0 011-1z" />
-                      <path d="M8.5 1.5V5H12" />
-                    </svg>
-                  ) : (
-                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M2 11h2V6H2v5zM6 11h2V3H6v8zM10 11h2V7h-2v4z" />
-                    </svg>
-                  )}
-                  {d.label}
-                </a>
-              ))}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {downloads.map((d) => (
+              <a
+                key={d.label}
+                href={d.url}
+                download
+                className="inline-flex items-center gap-1.5 text-xs font-medium py-1.5 px-3 rounded-lg border border-[#e5e7eb] bg-white text-[#374151] hover:bg-[#f9fafb] hover:border-[#0ea5e9] hover:text-[#0ea5e9] transition-all"
+              >
+                {d.icon === "doc" ? (
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M3 1.5h5.5L12 5v7.5a1 1 0 01-1 1H3a1 1 0 01-1-1v-11a1 1 0 011-1z" />
+                    <path d="M8.5 1.5V5H12" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M2 11h2V6H2v5zM6 11h2V3H6v8zM10 11h2V7h-2v4z" />
+                  </svg>
+                )}
+                {d.label}
+              </a>
+            ))}
+            <RegenButton
+              stateCode={stateCode}
+              stateName={US_STATES_CN[stateCode] || stateName}
+              categoryKey={category}
+              categoryLabel={categoryLabel}
+            />
+            {report?.created_at && (
+              <span className="text-xs text-[#9ca3af] ml-2">
+                最后生成：{new Date(report.created_at).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
         </div>
       </header>
 

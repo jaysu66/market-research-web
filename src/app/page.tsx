@@ -829,6 +829,49 @@ export default function DashboardPage() {
     (code) => !states[code]?.report && !states[code]?.generating
   );
 
+  // Regenerate a single researched state from table
+  const handleRegenFromTable = async (code: string) => {
+    const name = lang === 'cn' ? US_STATES_CN[code] : US_STATES[code];
+    if (!confirm(t(
+      `确认重新生成 ${name} 的报告？将花费约15-20分钟。`,
+      `Regenerate ${name} report? This takes ~15-20 minutes.`
+    ))) return;
+    startGeneration(code);
+  };
+
+  // Batch regenerate all researched states
+  const handleBatchRegen = async () => {
+    const researched = sortedStates.filter(s => s.report && !s.generating);
+    if (researched.length === 0) return;
+    if (!confirm(t(
+      `确认重新生成全部 ${researched.length} 个已调研州的报告？\n每个州约15-20分钟，将依次生成。`,
+      `Regenerate all ${researched.length} researched states? ~15-20 min each, processed sequentially.`
+    ))) return;
+
+    for (const s of researched) {
+      try {
+        const res = await fetch(`${API}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ state_code: s.code, product: category }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setStates(prev => ({
+            ...prev,
+            [s.code]: { ...prev[s.code], generating: true, taskId: data.task_id, progress: 0, step: 'collecting' },
+          }));
+          pollingRef.current.add(s.code);
+          try {
+            const tasks = JSON.parse(localStorage.getItem('generating_tasks') || '{}');
+            tasks[s.code] = { taskId: data.task_id, category };
+            localStorage.setItem('generating_tasks', JSON.stringify(tasks));
+          } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
+    }
+  };
+
   const startBatchAll = async () => {
     setBatchConfirm(false);
     setBatchRunning(true);
@@ -1601,6 +1644,17 @@ export default function DashboardPage() {
                         {t('对比模式', 'Compare')}
                       </button>
                     )}
+                    {sortedStates.filter(s => s.report && !s.generating).length > 0 && !compareMode && (
+                      <button
+                        onClick={handleBatchRegen}
+                        className="btn-secondary text-sm flex items-center gap-1.5"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                        {t('批量重新生成', 'Batch Regenerate')}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {compareMode && (
@@ -1652,6 +1706,7 @@ export default function DashboardPage() {
                           <th>TAM($B)</th>
                           <th>{t('回本(月)', 'Payback')}</th>
                           <th>{t('推荐城市', 'City')}</th>
+                          <th className="text-left py-3 px-2 text-xs font-medium text-zinc-500">{t('操作', 'Actions')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1702,6 +1757,19 @@ export default function DashboardPage() {
                               <td className="text-sm text-[#374151] font-mono">${p?.tam != null ? p.tam.toFixed(2) : '--'}</td>
                               <td className="text-sm text-[#374151] font-mono">{p?.payback_months ?? '--'}</td>
                               <td className="text-sm text-[#6b7280] max-w-[120px] truncate">{p?.recommended_city || '--'}</td>
+                              <td className="py-3 px-2">
+                                {s.report && !s.generating && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleRegenFromTable(s.code); }}
+                                    className="text-xs text-zinc-400 hover:text-[#0ea5e9] transition-colors"
+                                    title={t('重新生成报告', 'Regenerate report')}
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
