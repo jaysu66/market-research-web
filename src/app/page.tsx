@@ -462,17 +462,37 @@ type SortDir = "asc" | "desc";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+// Parse backend step text like "Stage 2/5: Running AI search queries..." into step index (0-4)
+function parseStageIndex(step: string): number {
+  if (!step) return -1;
+  // Match "Stage X/5" pattern
+  const m = step.match(/Stage\s+(\d+)\/(\d+)/i);
+  if (m) return parseInt(m[1], 10) - 1; // 0-based index
+  // Fallback: match old simple keys
+  const simpleMap: Record<string, number> = { collecting: 0, searching: 1, cleaning: 2, generating: 3, exporting: 4 };
+  if (step in simpleMap) return simpleMap[step];
+  // Check keywords
+  if (step.includes('Collecting') || step.includes('API')) return 0;
+  if (step.includes('search') || step.includes('Search')) return 1;
+  if (step.includes('Clean') || step.includes('verif')) return 2;
+  if (step.includes('Generat') || step.includes('report')) return 3;
+  if (step.includes('Upload') || step.includes('export') || step.includes('Export')) return 4;
+  if (step === 'Done!' || step.includes('Done')) return 5;
+  return -1;
+}
+
 function getStepLabel(step: string): string {
-  const labels: Record<string, string> = {
-    collecting: "API采集中",
-    searching: "搜索中",
-    cleaning: "数据清洗",
-    generating: "报告生成",
-    exporting: "导出中",
-    completed: "已完成",
-    error: "失败",
-  };
-  return labels[step] || "处理中";
+  const idx = parseStageIndex(step);
+  const labels = ["API采集中", "AI搜索中", "数据清洗", "报告生成中", "导出上传"];
+  if (idx >= 0 && idx < labels.length) return labels[idx];
+  if (idx >= labels.length) return "已完成";
+  // Show backend text directly if available
+  if (step && step.length > 3) {
+    // Extract the descriptive part after "Stage X/5: "
+    const m = step.match(/Stage\s+\d+\/\d+:\s*(.+)/i);
+    return m ? m[1] : step;
+  }
+  return "处理中";
 }
 
 // ---------------------------------------------------------------------------
@@ -1462,9 +1482,15 @@ export default function DashboardPage() {
                           </div>
                           <span className="text-sm text-[#0ea5e9] font-medium">{getStepLabel(s.step)}</span>
                         </div>
+                        {/* Backend step detail */}
+                        {s.step && s.step.length > 5 && (
+                          <div className="text-xs text-zinc-500 mb-2 bg-zinc-50 rounded-lg px-3 py-1.5 font-mono">
+                            {s.step} {s.progress > 0 && <span className="text-[#0ea5e9] ml-2">{s.progress}%</span>}
+                          </div>
+                        )}
                         <div className="flex gap-1">
                           {['collecting','searching','cleaning','generating','exporting'].map((step, i) => {
-                            const currentIdx = ['collecting','searching','cleaning','generating','exporting'].indexOf(s.step);
+                            const currentIdx = parseStageIndex(s.step);
                             const isDone = i < currentIdx;
                             const isCurrent = i === currentIdx;
                             return (
