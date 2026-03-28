@@ -214,6 +214,12 @@ export default function WorkspacePage() {
     const updated = [...catList, { key, label: newCatLabel.trim() }];
     setCatList(updated);
     saveCategories(updated);
+    // Remove from deleted list if re-adding
+    try {
+      const deleted: string[] = JSON.parse(localStorage.getItem("market_categories_deleted") || "[]");
+      const filtered = deleted.filter(k => k !== key);
+      localStorage.setItem("market_categories_deleted", JSON.stringify(filtered));
+    } catch { /* ignore */ }
     setNewCatLabel("");
     setShowAddModal(false);
     fetchCategories();
@@ -224,6 +230,14 @@ export default function WorkspacePage() {
     const updated = catList.filter((c) => c.key !== key);
     setCatList(updated);
     saveCategories(updated);
+    // Record deletion so loadCategories won't re-add from defaults
+    try {
+      const deleted: string[] = JSON.parse(localStorage.getItem("market_categories_deleted") || "[]");
+      if (!deleted.includes(key)) {
+        deleted.push(key);
+        localStorage.setItem("market_categories_deleted", JSON.stringify(deleted));
+      }
+    } catch { /* ignore */ }
     setDeleteConfirm(null);
     if (category === key && updated.length > 0) setCategory(updated[0].key);
     fetchCategories();

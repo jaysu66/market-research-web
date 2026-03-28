@@ -77,8 +77,12 @@ function loadCategories(): { key: string; label: string }[] {
   if (typeof window === "undefined") return DEFAULT_CATEGORIES;
   try {
     const saved = localStorage.getItem("market_categories");
-    // Merge DEFAULT + localStorage, deduplicate by key (DEFAULT wins on label)
-    const merged = [...DEFAULT_CATEGORIES];
+    const deleted: string[] = JSON.parse(localStorage.getItem("market_categories_deleted") || "[]");
+    const deletedSet = new Set(deleted);
+
+    // Start with DEFAULT, excluding user-deleted ones
+    const merged = DEFAULT_CATEGORIES.filter(c => !deletedSet.has(c.key));
+
     if (saved) {
       let extra: { key: string; label: string }[] = JSON.parse(saved);
       // Auto-fix Chinese keys
@@ -86,10 +90,10 @@ function loadCategories(): { key: string; label: string }[] {
         const fixed = CATEGORY_KEY_FIX[c.key];
         return fixed ? { key: fixed, label: c.label } : c;
       });
-      // Add non-default entries
-      const defaultKeys = new Set(DEFAULT_CATEGORIES.map(c => c.key));
+      // Add non-default, non-deleted entries
+      const mergedKeys = new Set(merged.map(c => c.key));
       for (const c of extra) {
-        if (!defaultKeys.has(c.key)) {
+        if (!mergedKeys.has(c.key) && !deletedSet.has(c.key)) {
           merged.push(c);
         }
       }
